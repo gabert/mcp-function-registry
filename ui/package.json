@@ -1,0 +1,13 @@
+{
+  "name": "ldoc-ui",
+  "version": "1.0.0",
+  "description": "Call graph visualizer for ldoc",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "neo4j-driver": "^5.21.0"
+  }
+}

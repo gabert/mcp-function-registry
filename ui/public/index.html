@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ldoc - Call Graph Explorer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.29.2/cytoscape.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="toolbar">
+  <label>Package</label><select id="pkg"><option value="">-- select --</option></select>
+  <label>Class</label><select id="cls" disabled><option value="">-- select --</option></select>
+  <label>Method</label><select id="mtd" disabled><option value="">-- select --</option></select>
+  <label>Depth</label>
+  <select id="dep">
+    <option value="1">1</option><option value="2" selected>2</option>
+    <option value="3">3</option><option value="5">5</option><option value="10">unlimited</option>
+  </select>
+  <label>Direction</label>
+  <select id="dir">
+    <option value="both">Both</option>
+    <option value="callees">Callees (down)</option>
+    <option value="callers">Callers (up)</option>
+  </select>
+  <button id="btn">Show Graph</button>
+</div>
+<div id="sig"></div>
+
+<div id="main">
+  <div id="sidebar">
+    <div class="section">
+      <h4>Ask a question</h4>
+      <textarea id="ragQ" rows="4" placeholder="e.g. which methods terminate an employee and what side effects do they have?"></textarea>
+      <div class="hint">Semantic search over summaries (Qdrant + embeddings). Press Enter to search, Shift+Enter for newline.</div>
+      <div class="results" id="ragResults"></div>
+    </div>
+    <div class="section">
+      <h4>Fulltext search</h4>
+      <input type="text" id="ftQ" placeholder="keyword in summary...">
+      <div class="hint">Substring match on summary text (case-insensitive)</div>
+      <div class="results" id="ftResults"></div>
+    </div>
+  </div>
+  <div id="cy"></div>
+  <div id="panel">
+    <h3 id="pname"></h3>
+    <div class="lbl">Signature <span id="pvis" class="vis-badge"></span></div>
+    <pre id="psig"></pre>
+    <div class="lbl">Purpose (when to use)</div>
+    <pre id="ppur" class="muted"></pre>
+    <div class="lbl" id="ptoollbl" style="display:none">
+      Tool Descriptor
+      <button id="pcopy" class="copy-btn" type="button">Copy</button>
+    </div>
+    <pre id="ptool" class="muted" style="display:none"></pre>
+    <div class="lbl">Internal Documentation</div>
+    <pre id="pdoc" class="muted"></pre>
+    <div class="lbl">Existing Javadoc</div>
+    <pre id="pexist" class="muted"></pre>
+    <div class="lbl">Summary (what the code does)</div>
+    <pre id="psum" class="muted"></pre>
+  </div>
+</div>
+<div id="tip"></div>
+
+<script>
+var pkg = document.getElementById("pkg");
+var cls = document.getElementById("cls");
+var mtd = document.getElementById("mtd");
+var dep = document.getElementById("dep");
+var dir = document.getElementById("dir");
+var btn = document.getElementById("btn");
+var sigBar = document.getElementById("sig");
+var tip = document.getElementById("tip");
+var panel = document.getElementById("panel");
+var cy = null;
+
+function get(url) { return fetch(url).then(function(r) { return r.json(); }); }
+
+function fillDetailPanel(d) {
+  document.getElementById("pname").textContent = d.label || d.name || "";
+  document.getElementById("psig").textContent = d.sig || "n/a";
+  document.getElementById("ppur").textContent = d.pu || "(not yet generated)";
+
+  var visEl = document.getElementById("pvis");
+  visEl.textContent = d.vis ? d.vis.toLowerCase().replace("_", "-") : "";
+  visEl.className = "vis-badge vis-" + (d.vis || "").toLowerCase();
+
+  // Tool descriptor — only shown for PUBLIC methods (non-empty JSON)
+  var toolLbl = document.getElementById("ptoollbl");
+  var toolPre = document.getElementById("ptool");
+  if (d.td && d.td.length > 0) {
+    var pretty = d.td;
+    try { pretty = JSON.stringify(JSON.parse(d.td), null, 2); } catch (e) {}
+    toolPre.textContent = pretty;
+    toolLbl.style.display = "";
+    toolPre.style.display = "";
+    document.getElementById("pcopy").onclick = function() {
+      navigator.clipboard.writeText(pretty).then(function() {
+        var btn = document.getElementById("pcopy");
+        var orig = btn.textContent;
+        btn.textContent = "Copied";
+        setTimeout(function() { btn.textContent = orig; }, 1200);
+      });
+    };
+  } else {
+    toolLbl.style.display = "none";
+    toolPre.style.display = "none";
+  }
+
+  document.getElementById("pdoc").textContent = d.idoc || "(not yet generated)";
+  document.getElementById("pexist").textContent = d.ej || "(none in source)";
+  document.getElementById("psum").textContent = d.sm || "(not yet generated)";
+}
+
+function fill(sel, items, val, label, ph) {
+  sel.innerHTML = "<option value=''>" + ph + "</option>";
+  items.forEach(function(i) {
+    var o = document.createElement("option");
+    o.value = val(i); o.textContent = label(i); sel.appendChild(o);
+  });
+}
+
+get("/api/packages").then(function(ps) {
+  fill(pkg, ps, function(p) { return p; }, function(p) { return p; }, "-- package --");
+});
+
+pkg.addEventListener("change", function() {
+  cls.innerHTML = "<option>-- select --</option>"; cls.disabled = true;
+  mtd.innerHTML = "<option>-- select --</option>"; mtd.disabled = true;
+  sigBar.textContent = "";
+  if (!pkg.value) return;
+  get("/api/classes?package=" + encodeURIComponent(pkg.value)).then(function(cs) {
+    fill(cls, cs, function(c) { return c; }, function(c) { return c; }, "-- class --");
+    cls.disabled = false;
+  });
+});
+
+cls.addEventListener("change", function() {
+  mtd.innerHTML = "<option>-- select --</option>"; mtd.disabled = true; sigBar.textContent = "";
+  if (!cls.value) return;
+  get("/api/methods?package=" + encodeURIComponent(pkg.value) + "&className=" + encodeURIComponent(cls.value)).then(function(ms) {
+    fill(mtd, ms, function(m) { return m.globalId; }, function(m) { return m.methodName; }, "-- method --");
+    mtd.disabled = false;
+    mtd._ms = ms;
+  });
+});
+
+mtd.addEventListener("change", function() {
+  var m = (mtd._ms || []).find(function(x) { return x.globalId === mtd.value; });
+  sigBar.textContent = m ? m.signature : "";
+});
+
+btn.addEventListener("click", function() {
+  if (!mtd.value) return;
+  get("/api/graph?globalId=" + encodeURIComponent(mtd.value) + "&depth=" + dep.value + "&direction=" + dir.value).then(renderGraph);
+});
+
+function renderGraph(data) {
+  var nodes = data.nodes, edges = data.edges, rootId = data.rootId;
+  var els = [];
+  nodes.forEach(function(n) {
+    els.push({ data: {
+      id: n.id, label: n.name || n.className + "#" + n.methodName,
+      pkg: n.package, isRoot: n.id === rootId,
+      sig: n.signature, vis: n.visibility,
+      idoc: n.internalDocumentation, td: n.toolDescriptor,
+      ej: n.existingJavadoc,
+      sm: n.summary, pu: n.purposeSummary
+    }});
+  });
+  edges.forEach(function(e) {
+    els.push({ data: {
+      id: e.source + "->" + e.target, source: e.source, target: e.target,
+      order: e.order != null ? String(e.order) : ""
+    }});
+  });
+
+  if (cy) cy.destroy();
+  cy = cytoscape({
+    container: document.getElementById("cy"),
+    elements: els,
+    wheelSensitivity: 0.2,
+    style: [
+      { selector: "node", style: {
+          "background-color": "#1c2030", "border-color": "#343a50", "border-width": 1.5,
+          "color": "#e6e8ef", "label": "data(label)", "text-valign": "center", "text-halign": "center",
+          "font-family": "'JetBrains Mono', monospace", "font-size": "13px", "font-weight": 500,
+          "width": "label", "height": "label",
+          "padding": "14px", "shape": "roundrectangle", "text-wrap": "wrap", "text-max-width": "200px" }},
+      { selector: "node[?isRoot]", style: {
+          "background-color": "#5cc8ff", "border-color": "#7c9cff", "border-width": 2,
+          "color": "#0f1115", "font-weight": "bold" }},
+      { selector: "edge", style: {
+          "width": 1.5, "line-color": "#343a50", "target-arrow-color": "#5b6478",
+          "target-arrow-shape": "triangle", "curve-style": "bezier",
+          "label": "data(order)", "font-family": "'JetBrains Mono', monospace",
+          "font-size": "12px", "color": "#9aa2b4",
+          "text-background-color": "#161922", "text-background-opacity": 1,
+          "text-background-padding": "3px", "text-background-shape": "roundrectangle" }},
+      { selector: ":selected", style: {
+          "background-color": "#4ec9b0", "border-color": "#4ec9b0",
+          "line-color": "#4ec9b0", "target-arrow-color": "#4ec9b0", "color": "#0f1115" }}
+    ],
+    layout: { name: "dagre", rankDir: "TB", nodeSep: 60, rankSep: 80, padding: 30 }
+  });
+
+  cy.on("tap", "node", function(e) { fillDetailPanel(e.target.data()); });
+
+  // Auto-fill detail panel with the root method
+  var rootNode = cy.$("#" + CSS.escape(rootId));
+  if (rootNode && rootNode.length) {
+    fillDetailPanel(rootNode.data());
+    rootNode.select();
+  }
+
+  cy.on("mouseover", "node", function(e) {
+    var d = e.target.data();
+    tip.innerHTML = "<b>" + d.label + "</b><br>" + d.pkg;
+    tip.style.display = "block";
+  });
+  cy.on("mousemove", function(e) {
+    tip.style.left = (e.originalEvent.clientX + 14) + "px";
+    tip.style.top = (e.originalEvent.clientY + 14) + "px";
+  });
+  cy.on("mouseout", "node", function() { tip.style.display = "none"; });
+}
+
+// ---------- Search (RAG + fulltext) ----------
+
+function debounce(fn, ms) {
+  var t; return function() {
+    var args = arguments, ctx = this;
+    clearTimeout(t);
+    t = setTimeout(function() { fn.apply(ctx, args); }, ms);
+  };
+}
+
+function renderResults(container, results, showScore) {
+  container.innerHTML = "";
+  if (!results.length) { container.innerHTML = "<div class='hint'>no matches</div>"; return; }
+  results.forEach(function(r) {
+    var div = document.createElement("div");
+    div.className = "result";
+    var scoreHtml = showScore && r.score != null ? "<span class='r-score'>" + r.score.toFixed(3) + "</span>" : "";
+    div.innerHTML =
+      scoreHtml +
+      "<div class='r-cls'>" + escapeHtml(r.package + "." + r.className) + "</div>" +
+      "<div class='r-name'>" + escapeHtml(r.methodName) + "</div>";
+    div.addEventListener("click", function() { openMethodFromResult(r); });
+    container.appendChild(div);
+  });
+}
+
+function truncate(s, n) { return s && s.length > n ? s.slice(0, n) + "..." : (s || ""); }
+function escapeHtml(s) {
+  return (s || "").replace(/[&<>"']/g, function(c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+
+function showError(container, msg) {
+  container.innerHTML = "<div class='err'>" + escapeHtml(msg) + "</div>";
+}
+function showLoading(container) {
+  container.innerHTML = "<div class='loading'>searching...</div>";
+}
+
+var ragQ = document.getElementById("ragQ");
+var ftQ = document.getElementById("ftQ");
+var ragResults = document.getElementById("ragResults");
+var ftResults = document.getElementById("ftResults");
+
+function runRag() {
+  var q = ragQ.value.trim();
+  if (!q) { ragResults.innerHTML = ""; return; }
+  showLoading(ragResults);
+  fetch("/api/search/rag?q=" + encodeURIComponent(q)).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.error) { showError(ragResults, d.error); return; }
+    renderResults(ragResults, d.results || [], true);
+  }).catch(function(e) { showError(ragResults, String(e)); });
+}
+
+var runFt = debounce(function() {
+  var q = ftQ.value.trim();
+  if (!q) { ftResults.innerHTML = ""; return; }
+  showLoading(ftResults);
+  fetch("/api/search/fulltext?q=" + encodeURIComponent(q)).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.error) { showError(ftResults, d.error); return; }
+    renderResults(ftResults, d.results || [], false);
+  }).catch(function(e) { showError(ftResults, String(e)); });
+}, 250);
+
+ragQ.addEventListener("keydown", function(e) {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    runRag();
+  }
+});
+ftQ.addEventListener("input", runFt);
+ftQ.addEventListener("keydown", function(e) {
+  if (e.key === "Enter") { e.preventDefault(); runFt(); }
+});
+
+// Click a search result: set dropdowns and render graph for that method
+function openMethodFromResult(r) {
+  // Ensure package is loaded, then class, then method — all by their known values
+  setSelectValue(pkg, r.package, function() {
+    pkg.dispatchEvent(new Event("change"));
+    waitForOptions(cls, function() {
+      setSelectValue(cls, r.className, function() {
+        cls.dispatchEvent(new Event("change"));
+        waitForOptions(mtd, function() {
+          setSelectValue(mtd, r.globalId, function() {
+            mtd.dispatchEvent(new Event("change"));
+            btn.click();
+          });
+        });
+      });
+    });
+  });
+}
+
+function setSelectValue(sel, val, cb) {
+  // If the option already exists, set; otherwise try again next tick (for async fills)
+  var has = Array.prototype.some.call(sel.options, function(o) { return o.value === val; });
+  if (has) { sel.value = val; cb && cb(); }
+  else { setTimeout(function() { setSelectValue(sel, val, cb); }, 50); }
+}
+
+function waitForOptions(sel, cb) {
+  // Wait until the select has more than just the placeholder
+  if (sel.options.length > 1 && !sel.disabled) { cb(); }
+  else { setTimeout(function() { waitForOptions(sel, cb); }, 50); }
+}
+
+</script>
+</body>
+</html>

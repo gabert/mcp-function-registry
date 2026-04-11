@@ -1,0 +1,26 @@
+# Build output
+target/
+dependency-reduced-pom.xml
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Secrets
+.env
+
+# Claude
+.claude/
+CLAUDE.md
+
+# Private docs
+VISION.md
+ROADMAP.md
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
