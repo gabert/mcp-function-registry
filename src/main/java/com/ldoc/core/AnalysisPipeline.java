@@ -6,6 +6,7 @@ import com.ldoc.llm.LLMResponse;
 import com.ldoc.llm.PromptBuilder;
 import com.ldoc.llm.SummaryParser;
 import com.ldoc.llm.ToolDescriptorBuilder;
+import com.ldoc.lsp.LspMethodExtractor;
 import com.ldoc.model.MethodInfo;
 import com.ldoc.parser.MethodExtractor;
 import com.ldoc.storage.Neo4jGraphStore;
@@ -14,7 +15,9 @@ import com.ldoc.storage.QdrantVectorStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,14 +33,41 @@ public class AnalysisPipeline {
     }
 
     public void run(Path sourceDir, String repository, String module, boolean withSummary, boolean withEmbeddings) {
+        run(sourceDir, repository, module, withSummary, withEmbeddings, false);
+    }
+
+    public void run(Path sourceDir, String repository, String module, boolean withSummary, boolean withEmbeddings, boolean useLsp) {
         boolean doLlm = withSummary;
         boolean doEmbeddings = withEmbeddings;
         int totalPhases = doLlm ? 4 : 3; // parse, sort, [llm,] store (Qdrant folded into store phase)
 
         // Phase 1 — Parse
-        log.info("[1/{}] Parsing source tree: {} (repo={}, module={})", totalPhases, sourceDir, repository, module);
-        MethodExtractor extractor = new MethodExtractor(repository, module);
-        Map<String, MethodInfo> methodMap = extractor.extractAll(sourceDir);
+        log.info("[1/{}] Parsing source tree: {} (repo={}, module={}, lsp={})", totalPhases, sourceDir, repository, module, useLsp);
+        Map<String, MethodInfo> methodMap;
+        if (useLsp) {
+            String cmdString = config.getRequired("lsp.server.command");
+            String languageId = config.get("lsp.language.id");
+            if (languageId == null || languageId.isBlank()) languageId = "java";
+            String ext = config.get("lsp.file.extension");
+            if (ext == null || ext.isBlank()) ext = ".java";
+            List<String> cmd = Arrays.stream(cmdString.split("\\s+")).filter(s -> !s.isBlank()).toList();
+
+            String wsDirStr = config.get("lsp.workspace.dir");
+            Path workspaceDir = (wsDirStr == null || wsDirStr.isBlank()) ? null : Path.of(wsDirStr);
+            long readyTimeoutMs = config.getInt("lsp.ready.timeout.ms", 180_000);
+
+            Path projectRoot = findProjectRoot(sourceDir);
+            if (!projectRoot.equals(sourceDir.toAbsolutePath())) {
+                log.info("Detected project root {} (source root: {})", projectRoot, sourceDir.toAbsolutePath());
+            }
+
+            LspMethodExtractor extractor = new LspMethodExtractor(
+                    repository, module, cmd, languageId, ext, workspaceDir, readyTimeoutMs);
+            methodMap = extractor.extractAll(projectRoot, sourceDir);
+        } else {
+            MethodExtractor extractor = new MethodExtractor(repository, module);
+            methodMap = extractor.extractAll(sourceDir);
+        }
         log.info("Extracted {} methods", methodMap.size());
 
         // Phase 2 — Topological sort
@@ -121,6 +151,24 @@ public class AnalysisPipeline {
      * create/update/delete stay distinct in vector space even when purposes overlap.
      * Falls back to the behavioral summary if the purpose summary is missing.
      */
+    /**
+     * Walk up from {@code start} looking for a build file (pom.xml, build.gradle[.kts]).
+     * Build-aware LSP servers like jdtls need the project root, not the source root.
+     * Falls back to the start directory if no build file is found upward.
+     */
+    private static Path findProjectRoot(Path start) {
+        Path cur = start.toAbsolutePath().normalize();
+        while (cur != null) {
+            if (Files.exists(cur.resolve("pom.xml"))
+                    || Files.exists(cur.resolve("build.gradle"))
+                    || Files.exists(cur.resolve("build.gradle.kts"))) {
+                return cur;
+            }
+            cur = cur.getParent();
+        }
+        return start.toAbsolutePath().normalize();
+    }
+
     private String buildEmbeddingText(MethodInfo method) {
         StringBuilder sb = new StringBuilder();
         sb.append(method.getClassName()).append('.').append(method.getMethodName()).append('\n');

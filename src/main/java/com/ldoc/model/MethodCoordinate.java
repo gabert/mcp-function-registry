@@ -9,7 +9,6 @@ import java.util.UUID;
  * Format: repository::module::qualifiedSignature
  */
 public class MethodCoordinate {
-
     private final String repository;
     private final String module;
     private final String qualifiedSignature;
