@@ -2,14 +2,6 @@
 
 **A code intelligence tool that parses your codebase, builds a call graph, and uses LLM to generate semantic search, method summaries, capability cards for AI agents, and code health assessments.**
 
-`mcp-function-registry` parses a codebase, resolves method calls into a full call graph,
-and optionally uses an LLM to generate rich documentation and assessments for every method.
-Results are stored in Neo4j (graph) and Qdrant (vector search) and explored via a built-in
-UI. The registry is language-agnostic by design; the current parser backend targets Java,
-with additional language backends on the roadmap.
-
----
-
 ## Why
 
 **For AI coding agents:** today's agents navigate codebases through grep, file reads, and
@@ -28,6 +20,17 @@ always-regenerable method documentation directly from the code — purpose summa
 discovery, behavioral docs for understanding, and code health assessments for
 maintainability. No manual upkeep required: re-run the pipeline after any change and the
 documentation reflects the current state of the code.
+
+---
+
+`mcp-function-registry` parses a codebase, resolves method calls into a full call graph,
+and optionally uses an LLM to generate rich documentation and assessments for every method.
+Results are stored in Neo4j (graph) and Qdrant (vector search) and explored via a built-in
+UI. The registry is language-agnostic by design; the current parser backend targets Java,
+with additional language backends on the roadmap.
+
+---
+
 
 <p align="center">
   <br>
