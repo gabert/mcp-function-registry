@@ -151,7 +151,7 @@ to decide whether and how to call the method from code it is writing.
 
 | Concern        | Choice                                                     |
 |----------------|------------------------------------------------------------|
-| Parsing        | `javaparser-symbol-solver-core` 3.26.2                     |
+| Parsing        | `javaparser-symbol-solver-core` 3.26.2, or any LSP server  |
 | LLM            | Anthropic Claude (claude-sonnet-4-6) via OkHttp            |
 | Embeddings     | OpenAI `text-embedding-3-small` via OkHttp                 |
 | Graph DB       | Neo4j Community 5.21 (no auth, local dev)                  |
@@ -210,6 +210,41 @@ java -jar target/mcp-function-registry-1.0.0-SNAPSHOT.jar \
 ```
 
 CLI shape: `<namespace> <source-root> [--with-summary] [--with-embeddings] [--lsp]`
+
+### LSP mode
+
+By default, the parser uses JavaParser with SymbolSolver for Java sources. For other
+languages — or when JavaParser cannot resolve symbols in your project — you can use
+an LSP server instead. Add the `--lsp` flag and configure the following properties
+in `.env` or `application.properties`:
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `lsp.server.command` | yes | Command to start the LSP server (e.g. `jdtls` or `typescript-language-server --stdio`) |
+| `lsp.language.id` | no | Language identifier sent to the server (default: `java`) |
+| `lsp.file.extension` | no | File extension to scan (default: `.java`) |
+| `lsp.workspace.dir` | no | Workspace root override; if unset, auto-detected by walking up to `pom.xml` / `build.gradle` |
+| `lsp.ready.timeout.ms` | no | How long to wait for the LSP server to initialize (default: `180000`) |
+
+Example for Java with Eclipse JDT Language Server:
+
+```properties
+lsp.server.command=jdtls
+lsp.language.id=java
+lsp.file.extension=.java
+```
+
+Example for TypeScript:
+
+```properties
+lsp.server.command=typescript-language-server --stdio
+lsp.language.id=typescript
+lsp.file.extension=.ts
+```
+
+The LSP backend extracts the same method information as JavaParser (signatures, call
+hierarchies, bodies) but works with any language that has an LSP server supporting
+`textDocument/documentSymbol` and `callHierarchy/incomingCalls`.
 
 ### 4. Explore
 
