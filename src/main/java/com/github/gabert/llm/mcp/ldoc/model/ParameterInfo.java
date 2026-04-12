@@ -13,6 +13,12 @@ public class ParameterInfo {
         this.name = name;
     }
 
+    public ParameterInfo(String type, String name, String description) {
+        this.type = type;
+        this.name = name;
+        this.description = description;
+    }
+
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
 

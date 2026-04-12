@@ -1,30 +1,44 @@
 package com.github.gabert.llm.mcp.ldoc.llm;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 
 import java.util.Map;
 
 /**
  * Parsed shape of the LLM's JSON response.
  *
- * Fields:
+ * Three artifacts per method:
  * <ul>
- *   <li>{@code purposeSummary} — discovery-oriented, embedded in Qdrant (always present)</li>
- *   <li>{@code summary} — behavioral description for developers (always present)</li>
- *   <li>{@code internalDocumentation} — caller-facing reference doc (always present)</li>
- *   <li>{@code toolDescription} — top-level natural-language description for the tool descriptor
- *       (null for non-public methods, where the prompt does not request it)</li>
- *   <li>{@code parameterDescriptions} — map of parameter NAME → per-parameter description
- *       (null for non-public methods; keys must match the actual parameter names)</li>
+ *   <li>{@code purposeSummary} — discovery-oriented, embedded in Qdrant for semantic search.
+ *       As long as needed for useful retrieval.</li>
+ *   <li>{@code developerDoc} — extended behavioral summary for humans. Call-chain-aware:
+ *       covers not just the method body but what its callees do.</li>
+ *   <li>{@code capabilityCard} — structured contract for AI coding agents
+ *       (null for non-public methods). Signature and parameter names/types are injected
+ *       deterministically after parsing; the LLM contributes descriptions only.</li>
  * </ul>
- *
- * Unknown properties are ignored so additional fields do not break parsing.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record LLMResponse(
         String purposeSummary,
-        String summary,
-        String internalDocumentation,
-        String toolDescription,
-        Map<String, String> parameterDescriptions
-) {}
+        String developerDoc,
+        CapabilityCardResponse capabilityCard,
+        CodeHealthResponse codeHealth
+) {
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record CodeHealthResponse(
+            String rating,
+            String note
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record CapabilityCardResponse(
+            Map<String, String> parameterDescriptions,
+            @JsonDeserialize(using = StringOrArrayDeserializer.class) String preconditions,
+            @JsonDeserialize(using = StringOrArrayDeserializer.class) String returns,
+            @JsonDeserialize(using = StringOrArrayDeserializer.class) @JsonProperty("throws") String throwsDoc,
+            @JsonDeserialize(using = StringOrArrayDeserializer.class) String sideEffects
+    ) {}
+}

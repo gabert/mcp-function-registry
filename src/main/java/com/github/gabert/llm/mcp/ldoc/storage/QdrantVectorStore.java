@@ -63,8 +63,8 @@ public class QdrantVectorStore {
             Map<String, JsonWithInt.Value> payload = new HashMap<>();
             // Coordinate — for cross-repo filtered search
             payload.put("globalId",           value(method.getId()));
-            payload.put("repository",         value(coord.getRepository()));
-            payload.put("module",             value(coord.getModule()));
+            payload.put("namespace",          value(coord.getNamespace()));
+            payload.put("language",           value(coord.getLanguage()));
             payload.put("qualifiedSignature", value(coord.getQualifiedSignature()));
             // Method metadata — for result display and filtering
             payload.put("package",            value(method.getPackageName()));
@@ -73,13 +73,12 @@ public class QdrantVectorStore {
             payload.put("signature",          value(method.getSignature()));
             payload.put("returnType",         value(method.getReturnType()));
             payload.put("sourceFile",         value(method.getSourceFile()));
-            // Visibility / tool-descriptor flag — for filtered search
+            // Visibility / capability-card flag — for filtered search
             // ("only methods an agent can call from new code")
             payload.put("visibility",         value(method.getVisibility() != null ? method.getVisibility().name() : ""));
-            payload.put("hasToolDescriptor",  value(method.getToolDescriptor() != null));
-            payload.put("toolName",           value(method.getClassName() + "." + method.getMethodName()));
+            payload.put("hasCapabilityCard",  value(method.getCapabilityCard() != null));
             // Content — for RAG retrieval
-            payload.put("summary",            value(method.getSummary()));
+            payload.put("developerDoc",       value(method.getDeveloperDoc() != null ? method.getDeveloperDoc() : ""));
             payload.put("purposeSummary",     value(method.getPurposeSummary() != null ? method.getPurposeSummary() : ""));
 
             var point = Points.PointStruct.newBuilder()

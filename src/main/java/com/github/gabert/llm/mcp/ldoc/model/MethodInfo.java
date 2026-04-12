@@ -24,11 +24,12 @@ public class MethodInfo {
     private String existingJavadoc;       // extracted from source, if present
 
     // Populated after LLM processing
-    private String summary;               // Developer-facing: what the code does (behavioral, detailed)
-    private String purposeSummary;        // Consumer-facing: why/when to call this (intent, used as RAG embedding text)
-    private String internalDocumentation; // Caller-facing reference doc (replaces the old generatedJavadoc)
-    private ToolDescriptor toolDescriptor; // LLM tool-use shaped descriptor (PUBLIC methods only; null otherwise)
-    private Map<String, String> calleeSummaries; // globalId -> summary
+    private String purposeSummary;        // Discovery-oriented: embedded in Qdrant for semantic search
+    private String developerDoc;          // Extended behavioral summary for humans (call-chain-aware)
+    private CapabilityCard capabilityCard; // Structured local contract for AI agents (PUBLIC methods only; null otherwise)
+    private String codeHealthRating;      // OK | CONCERN | SMELL
+    private String codeHealthNote;        // Explanation when rating is not OK
+    private Map<String, String> calleeSummaries; // globalId -> purposeSummary
 
     public MethodInfo() {}
 
@@ -74,17 +75,20 @@ public class MethodInfo {
     public String getExistingJavadoc() { return existingJavadoc; }
     public void setExistingJavadoc(String existingJavadoc) { this.existingJavadoc = existingJavadoc; }
 
-    public String getSummary() { return summary; }
-    public void setSummary(String summary) { this.summary = summary; }
-
     public String getPurposeSummary() { return purposeSummary; }
     public void setPurposeSummary(String purposeSummary) { this.purposeSummary = purposeSummary; }
 
-    public String getInternalDocumentation() { return internalDocumentation; }
-    public void setInternalDocumentation(String internalDocumentation) { this.internalDocumentation = internalDocumentation; }
+    public String getDeveloperDoc() { return developerDoc; }
+    public void setDeveloperDoc(String developerDoc) { this.developerDoc = developerDoc; }
 
-    public ToolDescriptor getToolDescriptor() { return toolDescriptor; }
-    public void setToolDescriptor(ToolDescriptor toolDescriptor) { this.toolDescriptor = toolDescriptor; }
+    public CapabilityCard getCapabilityCard() { return capabilityCard; }
+    public void setCapabilityCard(CapabilityCard capabilityCard) { this.capabilityCard = capabilityCard; }
+
+    public String getCodeHealthRating() { return codeHealthRating; }
+    public void setCodeHealthRating(String codeHealthRating) { this.codeHealthRating = codeHealthRating; }
+
+    public String getCodeHealthNote() { return codeHealthNote; }
+    public void setCodeHealthNote(String codeHealthNote) { this.codeHealthNote = codeHealthNote; }
 
     public Map<String, String> getCalleeSummaries() { return calleeSummaries; }
     public void setCalleeSummaries(Map<String, String> calleeSummaries) { this.calleeSummaries = calleeSummaries; }

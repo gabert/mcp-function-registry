@@ -25,7 +25,7 @@ public class SummaryParser {
             return mapper.readValue(json, LLMResponse.class);
         } catch (Exception e) {
             log.warn("Failed to parse LLM response as JSON: {}", e.getMessage());
-            return new LLMResponse("", llmResponse, "", null, null);
+            return new LLMResponse("", llmResponse, null, null);
         }
     }
 }

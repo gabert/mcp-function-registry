@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ldoc - Call Graph Explorer</title>
+<title>MCP Function Registry</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.29.2/cytoscape.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
@@ -52,19 +52,19 @@
     <h3 id="pname"></h3>
     <div class="lbl">Signature <span id="pvis" class="vis-badge"></span></div>
     <pre id="psig"></pre>
-    <div class="lbl">Purpose (when to use)</div>
-    <pre id="ppur" class="muted"></pre>
-    <div class="lbl" id="ptoollbl" style="display:none">
-      Tool Descriptor
-      <button id="pcopy" class="copy-btn" type="button">Copy</button>
-    </div>
-    <pre id="ptool" class="muted" style="display:none"></pre>
-    <div class="lbl">Internal Documentation</div>
-    <pre id="pdoc" class="muted"></pre>
     <div class="lbl">Existing Javadoc</div>
     <pre id="pexist" class="muted"></pre>
-    <div class="lbl">Summary (what the code does)</div>
-    <pre id="psum" class="muted"></pre>
+    <div class="lbl">Code Health</div>
+    <pre id="phealth" class="muted"></pre>
+    <div class="lbl">Purpose (when to use)</div>
+    <pre id="ppur" class="muted"></pre>
+    <div class="lbl">Developer Doc</div>
+    <pre id="pdev" class="muted"></pre>
+    <div class="lbl" id="pcardlbl" style="display:none">
+      Capability Card
+      <button id="pcopy" class="copy-btn" type="button">Copy</button>
+    </div>
+    <pre id="pcard" class="muted" style="display:none"></pre>
   </div>
 </div>
 <div id="tip"></div>
@@ -92,15 +92,17 @@ function fillDetailPanel(d) {
   visEl.textContent = d.vis ? d.vis.toLowerCase().replace("_", "-") : "";
   visEl.className = "vis-badge vis-" + (d.vis || "").toLowerCase();
 
-  // Tool descriptor — only shown for PUBLIC methods (non-empty JSON)
-  var toolLbl = document.getElementById("ptoollbl");
-  var toolPre = document.getElementById("ptool");
-  if (d.td && d.td.length > 0) {
-    var pretty = d.td;
-    try { pretty = JSON.stringify(JSON.parse(d.td), null, 2); } catch (e) {}
-    toolPre.textContent = pretty;
-    toolLbl.style.display = "";
-    toolPre.style.display = "";
+  document.getElementById("pdev").textContent = d.dev || "(not yet generated)";
+
+  // Capability card — only shown for PUBLIC methods (non-empty JSON)
+  var cardLbl = document.getElementById("pcardlbl");
+  var cardPre = document.getElementById("pcard");
+  if (d.cc && d.cc.length > 0) {
+    var pretty = d.cc;
+    try { pretty = JSON.stringify(JSON.parse(d.cc), null, 2); } catch (e) {}
+    cardPre.textContent = pretty;
+    cardLbl.style.display = "";
+    cardPre.style.display = "";
     document.getElementById("pcopy").onclick = function() {
       navigator.clipboard.writeText(pretty).then(function() {
         var btn = document.getElementById("pcopy");
@@ -110,13 +112,22 @@ function fillDetailPanel(d) {
       });
     };
   } else {
-    toolLbl.style.display = "none";
-    toolPre.style.display = "none";
+    cardLbl.style.display = "none";
+    cardPre.style.display = "none";
   }
 
-  document.getElementById("pdoc").textContent = d.idoc || "(not yet generated)";
+  // Code health
+  var healthEl = document.getElementById("phealth");
+  var rating = (d.chr || "").toUpperCase();
+  if (rating === "OK" || rating === "CONCERN" || rating === "SMELL") {
+    var badge = "<span class='health-badge health-" + rating.toLowerCase() + "'>" + rating + "</span>";
+    var note = d.chn && rating !== "OK" ? " <span class='health-note'>" + escapeHtml(d.chn) + "</span>" : "";
+    healthEl.innerHTML = badge + note;
+  } else {
+    healthEl.innerHTML = "<span class='muted'>(not yet generated)</span>";
+  }
+
   document.getElementById("pexist").textContent = d.ej || "(none in source)";
-  document.getElementById("psum").textContent = d.sm || "(not yet generated)";
 }
 
 function fill(sel, items, val, label, ph) {
@@ -170,9 +181,9 @@ function renderGraph(data) {
       id: n.id, label: n.name || n.className + "#" + n.methodName,
       pkg: n.package, isRoot: n.id === rootId,
       sig: n.signature, vis: n.visibility,
-      idoc: n.internalDocumentation, td: n.toolDescriptor,
-      ej: n.existingJavadoc,
-      sm: n.summary, pu: n.purposeSummary
+      dev: n.developerDoc, cc: n.capabilityCard,
+      ej: n.existingJavadoc, pu: n.purposeSummary,
+      chr: n.codeHealthRating, chn: n.codeHealthNote
     }});
   });
   edges.forEach(function(e) {
@@ -194,6 +205,10 @@ function renderGraph(data) {
           "font-family": "'JetBrains Mono', monospace", "font-size": "13px", "font-weight": 500,
           "width": "label", "height": "label",
           "padding": "14px", "shape": "roundrectangle", "text-wrap": "wrap", "text-max-width": "200px" }},
+      { selector: "node[chr='SMELL']", style: {
+          "border-color": "#ff7b72", "border-width": 2.5 }},
+      { selector: "node[chr='CONCERN']", style: {
+          "border-color": "#f0c040", "border-width": 2 }},
       { selector: "node[?isRoot]", style: {
           "background-color": "#5cc8ff", "border-color": "#7c9cff", "border-width": 2,
           "color": "#0f1115", "font-weight": "bold" }},

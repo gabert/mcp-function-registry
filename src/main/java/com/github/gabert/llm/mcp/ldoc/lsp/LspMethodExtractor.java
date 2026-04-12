@@ -41,19 +41,19 @@ public class LspMethodExtractor {
     private static final Pattern PACKAGE_PATTERN =
             Pattern.compile("^\\s*package\\s+([\\w.]+)\\s*;", Pattern.MULTILINE);
 
-    private final String repository;
-    private final String module;
+    private final String namespace;
+    private final String language;
     private final List<String> serverCommand;
     private final String languageId;
     private final String fileExtension;
     private final Path workspaceDir;
     private final long readyTimeoutMs;
 
-    public LspMethodExtractor(String repository, String module,
+    public LspMethodExtractor(String namespace, String language,
                               List<String> serverCommand, String languageId, String fileExtension,
                               Path workspaceDir, long readyTimeoutMs) {
-        this.repository = repository;
-        this.module = module != null ? module : "";
+        this.namespace = namespace;
+        this.language = language != null ? language : "java";
         this.serverCommand = serverCommand;
         this.languageId = languageId;
         this.fileExtension = fileExtension.startsWith(".") ? fileExtension : "." + fileExtension;
@@ -70,7 +70,7 @@ public class LspMethodExtractor {
     public Map<String, MethodInfo> extractAll(Path projectRoot, Path sourceRoot) {
         List<String> cmd = new ArrayList<>(serverCommand);
         if (workspaceDir != null) {
-            Path dataDir = workspaceDir.resolve(sanitize(repository));
+            Path dataDir = workspaceDir.resolve(sanitize(namespace));
             try {
                 Files.createDirectories(dataDir);
             } catch (IOException e) {
@@ -274,7 +274,7 @@ public class LspMethodExtractor {
         String qualSig = (packageName == null || packageName.isBlank() ? "" : packageName + ".")
                 + className + "#" + name + (detail == null ? "" : detail);
 
-        MethodCoordinate coord = new MethodCoordinate(repository, module, qualSig);
+        MethodCoordinate coord = new MethodCoordinate(namespace, language, qualSig);
 
         MethodInfo info = new MethodInfo();
         info.setCoordinate(coord);

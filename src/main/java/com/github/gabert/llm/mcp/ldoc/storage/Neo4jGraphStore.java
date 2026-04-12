@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.gabert.llm.mcp.ldoc.core.AppConfig;
 import com.github.gabert.llm.mcp.ldoc.model.MethodInfo;
 import com.github.gabert.llm.mcp.ldoc.model.ParameterInfo;
-import com.github.gabert.llm.mcp.ldoc.model.ToolDescriptor;
+import com.github.gabert.llm.mcp.ldoc.model.CapabilityCard;
 import org.neo4j.driver.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,10 +19,10 @@ import java.util.Map;
  * Stores method nodes and CALLS relationships in Neo4j.
  *
  * Schema:
- *   (:Method {globalId, repository, module, qualifiedSignature,
+ *   (:Method {globalId, namespace, language, qualifiedSignature,
  *             package, className, methodName, signature, returnType,
- *             visibility, sourceFile, bodyHash, summary, purposeSummary,
- *             internalDocumentation, toolDescriptor (JSON string, null for non-public),
+ *             visibility, sourceFile, bodyHash, purposeSummary, developerDoc,
+ *             capabilityCard (JSON string, null for non-public),
  *             existingJavadoc, parameters, generatedAt})
  *   (:Method)-[:CALLS]->(:Method)
  *
@@ -67,8 +67,8 @@ public class Neo4jGraphStore implements AutoCloseable {
     public void upsertMethod(MethodInfo method) {
         Map<String, Object> params = new HashMap<>();
         params.put("globalId",           method.getId());
-        params.put("repository",         method.getCoordinate().getRepository());
-        params.put("module",             method.getCoordinate().getModule());
+        params.put("namespace",          method.getCoordinate().getNamespace());
+        params.put("language",           method.getCoordinate().getLanguage());
         params.put("qualifiedSignature", method.getCoordinate().getQualifiedSignature());
         params.put("package",            method.getPackageName());
         params.put("className",          method.getClassName());
@@ -77,10 +77,11 @@ public class Neo4jGraphStore implements AutoCloseable {
         params.put("returnType",         method.getReturnType());
         params.put("sourceFile",         method.getSourceFile());
         params.put("bodyHash",           method.getBodyHash());
-        params.put("summary",            nullToEmpty(method.getSummary()));
         params.put("purposeSummary",     nullToEmpty(method.getPurposeSummary()));
-        params.put("internalDocumentation", nullToEmpty(method.getInternalDocumentation()));
-        params.put("toolDescriptor",     serializeToolDescriptor(method.getToolDescriptor()));
+        params.put("developerDoc",      nullToEmpty(method.getDeveloperDoc()));
+        params.put("capabilityCard",    serializeCapabilityCard(method.getCapabilityCard()));
+        params.put("codeHealthRating",   nullToEmpty(method.getCodeHealthRating()));
+        params.put("codeHealthNote",    nullToEmpty(method.getCodeHealthNote()));
         params.put("visibility",         method.getVisibility() != null ? method.getVisibility().name() : "");
         params.put("existingJavadoc",    nullToEmpty(method.getExistingJavadoc()));
         params.put("parameters",         serializeParams(method.getParameters()));
@@ -90,8 +91,8 @@ public class Neo4jGraphStore implements AutoCloseable {
         try (Session session = driver.session()) {
             session.run("""
                     MERGE (m:Method {globalId: $globalId})
-                    SET m.repository         = $repository,
-                        m.module             = $module,
+                    SET m.namespace          = $namespace,
+                        m.language           = $language,
                         m.qualifiedSignature = $qualifiedSignature,
                         m.package            = $package,
                         m.className          = $className,
@@ -100,10 +101,11 @@ public class Neo4jGraphStore implements AutoCloseable {
                         m.returnType         = $returnType,
                         m.sourceFile         = $sourceFile,
                         m.bodyHash           = $bodyHash,
-                        m.summary            = $summary,
                         m.purposeSummary     = $purposeSummary,
-                        m.internalDocumentation = $internalDocumentation,
-                        m.toolDescriptor     = $toolDescriptor,
+                        m.developerDoc       = $developerDoc,
+                        m.capabilityCard     = $capabilityCard,
+                        m.codeHealthRating   = $codeHealthRating,
+                        m.codeHealthNote     = $codeHealthNote,
                         m.visibility         = $visibility,
                         m.existingJavadoc    = $existingJavadoc,
                         m.parameters         = $parameters,
@@ -141,12 +143,12 @@ public class Neo4jGraphStore implements AutoCloseable {
         }
     }
 
-    private String serializeToolDescriptor(ToolDescriptor descriptor) {
-        if (descriptor == null) return "";
+    private String serializeCapabilityCard(CapabilityCard card) {
+        if (card == null) return "";
         try {
-            return mapper.writeValueAsString(descriptor);
+            return mapper.writeValueAsString(card);
         } catch (JsonProcessingException e) {
-            log.warn("Failed to serialize ToolDescriptor: {}", e.getMessage());
+            log.warn("Failed to serialize CapabilityCard: {}", e.getMessage());
             return "";
         }
     }

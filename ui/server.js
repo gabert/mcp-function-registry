@@ -65,10 +65,11 @@ app.get("/api/graph", async (req, res) => {
                 signature: p.signature || "",
                 visibility: p.visibility || "",
                 existingJavadoc: p.existingJavadoc || "",
-                internalDocumentation: p.internalDocumentation || "",
-                toolDescriptor: p.toolDescriptor || "",
-                summary: p.summary || "",
-                purposeSummary: p.purposeSummary || ""
+                developerDoc: p.developerDoc || "",
+                capabilityCard: p.capabilityCard || "",
+                purposeSummary: p.purposeSummary || "",
+                codeHealthRating: p.codeHealthRating || "",
+                codeHealthNote: p.codeHealthNote || ""
             });
     }
 
@@ -101,9 +102,11 @@ app.get("/api/graph", async (req, res) => {
                 package: p.package, signature: p.signature || "",
                 visibility: p.visibility || "",
                 existingJavadoc: p.existingJavadoc || "",
-                internalDocumentation: p.internalDocumentation || "",
-                toolDescriptor: p.toolDescriptor || "",
-                summary: p.summary || "", purposeSummary: p.purposeSummary || ""
+                developerDoc: p.developerDoc || "",
+                capabilityCard: p.capabilityCard || "",
+                purposeSummary: p.purposeSummary || "",
+                codeHealthRating: p.codeHealthRating || "",
+                codeHealthNote: p.codeHealthNote || ""
             });
         }
     }
@@ -125,7 +128,7 @@ app.get("/api/search/fulltext", async (req, res) => {
     if (tokens.length === 0) return res.json({ results: [] });
 
     const whereClauses = tokens.map((_, i) =>
-        `((m.summary IS NOT NULL AND toLower(m.summary) CONTAINS $t${i})
+        `((m.developerDoc IS NOT NULL AND toLower(m.developerDoc) CONTAINS $t${i})
          OR (m.purposeSummary IS NOT NULL AND toLower(m.purposeSummary) CONTAINS $t${i}))`
     ).join(" AND ");
 
@@ -137,7 +140,7 @@ app.get("/api/search/fulltext", async (req, res) => {
          WHERE ${whereClauses}
          RETURN m.globalId AS globalId, m.package AS package, m.className AS className,
                 m.methodName AS methodName, m.signature AS signature,
-                m.summary AS summary, m.purposeSummary AS purposeSummary
+                m.developerDoc AS developerDoc, m.purposeSummary AS purposeSummary
          LIMIT $limit`,
         params
     );
@@ -148,7 +151,7 @@ app.get("/api/search/fulltext", async (req, res) => {
             className: r.get("className"),
             methodName: r.get("methodName"),
             signature: r.get("signature"),
-            summary: r.get("summary") || "",
+            developerDoc: r.get("developerDoc") || "",
             purposeSummary: r.get("purposeSummary") || ""
         }))
     });
@@ -199,7 +202,7 @@ app.get("/api/search/rag", async (req, res) => {
             className: p.payload.className,
             methodName: p.payload.methodName,
             signature: p.payload.signature,
-            summary: p.payload.summary || "",
+            developerDoc: p.payload.developerDoc || "",
             purposeSummary: p.payload.purposeSummary || "",
             score: p.score
         }));
@@ -209,4 +212,4 @@ app.get("/api/search/rag", async (req, res) => {
     }
 });
 
-app.listen(PORT, () => console.log("ldoc UI running at http://localhost:" + PORT));
+app.listen(PORT, () => console.log("MCP Function Registry UI running at http://localhost:" + PORT));

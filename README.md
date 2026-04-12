@@ -2,6 +2,15 @@
 
 **A queryable index of a codebase's methods, built for AI coding agents.**
 
+<p align="center">
+  <em>Call graph with method detail panel — purpose summary, developer doc, capability card</em><br>
+  <img src="doc/image1.png" alt="Call graph visualization" width="100%">
+  <br><em>Scrolled detail panel — code health assessment, existing javadoc</em><br>
+  <img src="doc/image2.png" alt="Method detail panel" width="100%">
+  <br><em>Callers tree — which code paths lead to Employee#setDepartment</em><br>
+  <img src="doc/image3.png" alt="Callers tree" width="100%">
+</p>
+
 `mcp-function-registry` walks a resolved call graph, generates call-chain-aware summaries
 and LLM tool descriptors for every method, and stores the result as a Neo4j graph plus a
 Qdrant vector index. The registry is language-agnostic by design: coding agents query it
@@ -180,7 +189,7 @@ java -jar target/mcp-function-registry-1.0.0-SNAPSHOT.jar \
   my-repo ./src/main/java --with-summary --with-embeddings
 ```
 
-CLI shape: `<repository> <source-root> [module] [--with-summary] [--with-embeddings]`
+CLI shape: `<namespace> <source-root> [--with-summary] [--with-embeddings] [--lsp]`
 
 ### 4. Explore
 

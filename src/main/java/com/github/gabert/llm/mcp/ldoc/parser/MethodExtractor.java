@@ -26,12 +26,12 @@ public class MethodExtractor {
 
     private static final Logger log = LoggerFactory.getLogger(MethodExtractor.class);
 
-    private final String repository;
-    private final String module;
+    private final String namespace;
+    private final String language;
 
-    public MethodExtractor(String repository, String module) {
-        this.repository = repository;
-        this.module = module != null ? module : "";
+    public MethodExtractor(String namespace, String language) {
+        this.namespace = namespace;
+        this.language = language != null ? language : "java";
     }
 
     public Map<String, MethodInfo> extractAll(Path sourceRoot) {
@@ -90,9 +90,8 @@ public class MethodExtractor {
     private MethodInfo buildMethodInfo(MethodDeclaration method, CompilationUnit cu) {
         ResolvedMethodDeclaration resolved = method.resolve();
 
-        // Build coordinate: repository::module::qualifiedSignature
         MethodCoordinate coordinate = new MethodCoordinate(
-                repository, module, resolved.getQualifiedSignature());
+                namespace, language, resolved.getQualifiedSignature());
 
         MethodInfo info = new MethodInfo();
         info.setCoordinate(coordinate);
@@ -118,13 +117,12 @@ public class MethodExtractor {
         method.getJavadocComment().ifPresent(jd ->
                 info.setExistingJavadoc(jd.getContent()));
 
-        // Resolve callees — wrap each in the same repo::module coordinate
         List<String> calleeIds = new ArrayList<>();
         String selfId = info.getId();
         for (MethodCallExpr call : method.findAll(MethodCallExpr.class)) {
             try {
                 String qualSig = call.resolve().getQualifiedSignature();
-                String calleeGlobalId = new MethodCoordinate(repository, module, qualSig).globalId();
+                String calleeGlobalId = new MethodCoordinate(namespace, language, qualSig).globalId();
                 if (!calleeGlobalId.equals(selfId)) {
                     calleeIds.add(calleeGlobalId);
                 }

@@ -5,7 +5,9 @@ import com.github.gabert.llm.mcp.ldoc.llm.ClaudeClient;
 import com.github.gabert.llm.mcp.ldoc.llm.LLMResponse;
 import com.github.gabert.llm.mcp.ldoc.llm.PromptBuilder;
 import com.github.gabert.llm.mcp.ldoc.llm.SummaryParser;
-import com.github.gabert.llm.mcp.ldoc.llm.ToolDescriptorBuilder;
+import com.github.gabert.llm.mcp.ldoc.model.CapabilityCard;
+import com.github.gabert.llm.mcp.ldoc.model.ParameterInfo;
+import com.github.gabert.llm.mcp.ldoc.model.Visibility;
 import com.github.gabert.llm.mcp.ldoc.lsp.LspMethodExtractor;
 import com.github.gabert.llm.mcp.ldoc.model.MethodInfo;
 import com.github.gabert.llm.mcp.ldoc.parser.MethodExtractor;
@@ -17,7 +19,9 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,22 +36,24 @@ public class AnalysisPipeline {
         this.config = config;
     }
 
-    public void run(Path sourceDir, String repository, String module, boolean withSummary, boolean withEmbeddings) {
-        run(sourceDir, repository, module, withSummary, withEmbeddings, false);
+    public void run(Path sourceDir, String namespace, boolean withSummary, boolean withEmbeddings) {
+        run(sourceDir, namespace, withSummary, withEmbeddings, false);
     }
 
-    public void run(Path sourceDir, String repository, String module, boolean withSummary, boolean withEmbeddings, boolean useLsp) {
+    public void run(Path sourceDir, String namespace, boolean withSummary, boolean withEmbeddings, boolean useLsp) {
         boolean doLlm = withSummary;
         boolean doEmbeddings = withEmbeddings;
         int totalPhases = doLlm ? 4 : 3; // parse, sort, [llm,] store (Qdrant folded into store phase)
 
         // Phase 1 — Parse
-        log.info("[1/{}] Parsing source tree: {} (repo={}, module={}, lsp={})", totalPhases, sourceDir, repository, module, useLsp);
+        log.info("[1/{}] Parsing source tree: {} (namespace={}, lsp={})", totalPhases, sourceDir, namespace, useLsp);
         Map<String, MethodInfo> methodMap;
+        String language = "java"; // default for now; will come from config for multi-language
         if (useLsp) {
             String cmdString = config.getRequired("lsp.server.command");
             String languageId = config.get("lsp.language.id");
             if (languageId == null || languageId.isBlank()) languageId = "java";
+            language = languageId;
             String ext = config.get("lsp.file.extension");
             if (ext == null || ext.isBlank()) ext = ".java";
             List<String> cmd = Arrays.stream(cmdString.split("\\s+")).filter(s -> !s.isBlank()).toList();
@@ -62,10 +68,10 @@ public class AnalysisPipeline {
             }
 
             LspMethodExtractor extractor = new LspMethodExtractor(
-                    repository, module, cmd, languageId, ext, workspaceDir, readyTimeoutMs);
+                    namespace, language, cmd, languageId, ext, workspaceDir, readyTimeoutMs);
             methodMap = extractor.extractAll(projectRoot, sourceDir);
         } else {
-            MethodExtractor extractor = new MethodExtractor(repository, module);
+            MethodExtractor extractor = new MethodExtractor(namespace, language);
             methodMap = extractor.extractAll(sourceDir);
         }
         log.info("Extracted {} methods", methodMap.size());
@@ -82,7 +88,6 @@ public class AnalysisPipeline {
             ClaudeClient claude = new ClaudeClient(config);
             PromptBuilder promptBuilder = new PromptBuilder();
             SummaryParser summaryParser = new SummaryParser();
-            ToolDescriptorBuilder toolDescriptorBuilder = new ToolDescriptorBuilder();
             Map<String, String> summaryCache = new HashMap<>();
 
             for (String id : orderedIds) {
@@ -100,12 +105,40 @@ public class AnalysisPipeline {
                 String response = claude.complete(prompt);
                 LLMResponse parsed = summaryParser.parse(response);
                 method.setPurposeSummary(parsed.purposeSummary());
-                method.setSummary(parsed.summary());
-                method.setInternalDocumentation(parsed.internalDocumentation());
-                // Non-null only for PUBLIC methods; also writes parameter descriptions
-                // back onto the MethodInfo's ParameterInfo instances.
-                method.setToolDescriptor(toolDescriptorBuilder.build(method, parsed));
-                summaryCache.put(id, method.getSummary());
+                method.setDeveloperDoc(parsed.developerDoc());
+
+                // Build capability card for public methods only;
+                // inject signature and parameter names/types deterministically
+                if (method.getVisibility() == Visibility.PUBLIC && parsed.capabilityCard() != null) {
+                    LLMResponse.CapabilityCardResponse card = parsed.capabilityCard();
+                    Map<String, String> paramDescs = card.parameterDescriptions() != null
+                            ? card.parameterDescriptions()
+                            : Collections.emptyMap();
+                    List<ParameterInfo> cardParams = new ArrayList<>();
+                    if (method.getParameters() != null) {
+                        for (ParameterInfo p : method.getParameters()) {
+                            String desc = paramDescs.getOrDefault(p.getName(), "");
+                            cardParams.add(new ParameterInfo(p.getType(), p.getName(), desc));
+                        }
+                    }
+                    method.setCapabilityCard(new CapabilityCard(
+                            method.getSignature(),
+                            method.getPurposeSummary(),
+                            cardParams,
+                            card.preconditions(),
+                            card.returns(),
+                            card.throwsDoc(),
+                            card.sideEffects()
+                    ));
+                }
+
+                // Code health
+                if (parsed.codeHealth() != null) {
+                    method.setCodeHealthRating(parsed.codeHealth().rating());
+                    method.setCodeHealthNote(parsed.codeHealth().note());
+                }
+
+                summaryCache.put(id, method.getPurposeSummary());
 
                 log.info("  Summarized: {}", id);
             }
@@ -179,8 +212,6 @@ public class AnalysisPipeline {
         String purpose = method.getPurposeSummary();
         if (purpose != null && !purpose.isBlank()) {
             sb.append(purpose);
-        } else if (method.getSummary() != null) {
-            sb.append(method.getSummary());
         }
         return sb.toString();
     }
