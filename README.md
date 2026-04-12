@@ -10,10 +10,10 @@ with additional language backends on the roadmap.
 
 <p align="center">
   <br>
-  <em>Call graph with method detail panel — purpose summary, developer doc, capability card</em><br>
+  <em>Call graph with method detail panel — signature, javadoc, code health, purpose summary</em><br>
   <img src="doc/image1.png" alt="Call graph visualization" width="100%">
   <br><br>
-  <em>Scrolled detail panel — code health assessment, existing javadoc</em><br>
+  <em>Scrolled detail panel — developer doc and capability card</em><br>
   <img src="doc/image2.png" alt="Method detail panel" width="100%">
   <br><br>
   <em>Callers tree — which code paths lead to Employee#setDepartment</em><br>
