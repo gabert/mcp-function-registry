@@ -1,52 +1,76 @@
 # mcp-function-registry
 
-**A queryable index of a codebase's methods, built for AI coding agents.**
+**A code intelligence tool that parses your codebase, builds a call graph, and uses LLM to generate semantic search, method summaries, capability cards for AI agents, and code health assessments.**
+
+`mcp-function-registry` parses a codebase, resolves method calls into a full call graph,
+and optionally uses an LLM to generate rich documentation and assessments for every method.
+Results are stored in Neo4j (graph) and Qdrant (vector search) and explored via a built-in
+UI. The registry is language-agnostic by design; the current parser backend targets Java,
+with additional language backends on the roadmap.
 
 <p align="center">
+  <br>
   <em>Call graph with method detail panel — purpose summary, developer doc, capability card</em><br>
   <img src="doc/image1.png" alt="Call graph visualization" width="100%">
-  <br><em>Scrolled detail panel — code health assessment, existing javadoc</em><br>
+  <br><br>
+  <em>Scrolled detail panel — code health assessment, existing javadoc</em><br>
   <img src="doc/image2.png" alt="Method detail panel" width="100%">
-  <br><em>Callers tree — which code paths lead to Employee#setDepartment</em><br>
+  <br><br>
+  <em>Callers tree — which code paths lead to Employee#setDepartment</em><br>
   <img src="doc/image3.png" alt="Callers tree" width="100%">
 </p>
 
-`mcp-function-registry` walks a resolved call graph, generates call-chain-aware summaries
-and LLM tool descriptors for every method, and stores the result as a Neo4j graph plus a
-Qdrant vector index. The registry is language-agnostic by design: coding agents query it
-— via MCP or a thin REST surface — to discover *which existing method to call* when
-writing new code, instead of re-deriving the answer from raw source on every turn. The
-current parser backend targets Java; additional language backends are on the roadmap.
-
 ---
 
-## Why
+## Use cases
 
-Large codebases overwhelm agent context windows. Dumping a repository into a prompt
-is wasteful and imprecise; grep-based retrieval surfaces syntax matches, not
-behavioural ones. The working hypothesis here is that an agent should be able to ask
-questions like:
+### Semantic search over methods
+Build a searchable index of your codebase. Each method gets a **purpose summary** —
+a business-oriented description optimized for vector search. Ask natural-language questions
+like *"which method hires a new employee?"* and get ranked results in milliseconds,
+instead of grepping for symbol names.
 
-- *"What public method in this repo creates an invoice from a cart?"*
-- *"Everything downstream of `PaymentController.charge()` — which of those touch the
-  database?"*
-- *"Give me the tool-descriptor for `EmployeeService.hireEmployee` so I can call it
-  from the code I'm writing."*
+### Call-chain-aware method summaries
+Generate **developer documentation** that reflects not just the method body but what its
+callees actually do. Methods are summarized in topological order (leaves first), so each
+summary builds on already-generated callee context. The result is far more accurate than
+per-method-in-isolation prompting.
 
-…and get a structured, ranked answer in milliseconds. That requires the index to be
-**pre-computed, call-chain-aware, and stored as a graph + vector space**, not
-regenerated on demand. Hence this project.
+### Capability cards for AI coding agents
+For public methods, generate a structured **capability card** — a local contract that tells
+an AI agent everything it needs to decide whether to call this method and how to call it
+correctly: purpose, parameter descriptions, preconditions, return value, exceptions, and
+side effects. Structural fields (signature, parameter names/types) are deterministic from
+the AST; the LLM contributes only descriptions.
+
+### Code health assessment
+Every method receives a lightweight **code health rating** (OK / CONCERN / SMELL) with a
+short explanation. The LLM catches things static analysis often misses: mixed responsibilities,
+misleading names vs actual behavior, dead code, silent error swallowing, deeply nested
+control flow.
+
+### MCP server for AI coding agents
+The ultimate goal: expose the registry as an **MCP (Model Context Protocol) server** so
+coding agents can query it natively. An agent working on your codebase can discover
+existing methods via semantic search, retrieve capability cards to understand how to call
+them, and navigate the call graph — all without stuffing raw source into its context window.
+The MCP server is under active development.
+
+### Call graph exploration
+Even without LLM calls, the tool builds a full call graph stored in Neo4j. Explore which
+methods call which, find entry points, trace call chains, and understand the structure of
+an unfamiliar codebase through the built-in graph UI.
 
 ---
 
 ## What it does
 
 ```
-Java sources
+Source code
     │
     ▼
 ┌───────────────────────────────────────────────────────────────┐
-│ 1. Parse (JavaParser + SymbolSolver)                          │
+│ 1. Parse (JavaParser + SymbolSolver, or LSP)                  │
 │    Resolve every method call to a fully qualified signature.  │
 │    Build MethodInfo records with callees, visibility, body,   │
 │    existing javadoc, signature, parameters.                   │
@@ -62,18 +86,17 @@ Java sources
     │
     ▼
 ┌───────────────────────────────────────────────────────────────┐
-│ 3. LLM phase (Claude Sonnet 4.6)                              │
+│ 3. LLM phase (Claude)                                         │
 │    For each method in topological order, prompt includes the  │
-│    body + already-generated summaries of its callees. Claude  │
-│    returns four fields:                                       │
-│      - purposeSummary        (embedded for semantic search)   │
-│      - summary               (behavioural walkthrough)        │
-│      - internalDocumentation (contract-style reference)       │
-│      - toolDescriptor        (public methods only; LLM-tool   │
-│                               shaped, for agent consumption)  │
-│    Structural fields (parameter names/types, return type,     │
-│    coordinate) are derived deterministically and merged — the │
-│    LLM contributes only descriptions.                         │
+│    body + already-generated purpose summaries of its callees. │
+│    The LLM returns:                                           │
+│      - purposeSummary    (business-oriented, for embeddings)  │
+│      - developerDoc      (call-chain-aware behavioral summary)│
+│      - capabilityCard    (structured contract, public only)   │
+│      - codeHealth        (OK / CONCERN / SMELL + explanation) │
+│    Structural fields (signature, parameter names/types) are   │
+│    deterministic from the AST; the LLM contributes only       │
+│    descriptions.                                              │
 └───────────────────────────────────────────────────────────────┘
     │
     ▼
@@ -82,48 +105,45 @@ Java sources
 │    Neo4j : (:Method)-[:CALLS {order}]->(:Method) with full    │
 │            metadata on the node.                              │
 │    Qdrant: one point per method, embedded via OpenAI          │
-│            text-embedding-3-small. Payload carries visibility,│
-│            tool name, and the canonical coordinate for        │
-│            filtered search.                                   │
+│            text-embedding-3-small using the purposeSummary.   │
 └───────────────────────────────────────────────────────────────┘
 ```
 
-### Multi-repo identity
+### Method identity
 
 Every method has a globally unique coordinate:
 
 ```
-repository::module::fully.qualified.Class.method(arg.Types)
+namespace::language:fully.qualified.Class.method(ParamTypes)
 ```
+
+Example: `demo-app::java:com.example.demo.service.EmployeeService.hireEmployee(com.example.demo.dto.EmployeeDto)`
 
 `MethodCoordinate` gives you `globalId()` (used as the Neo4j node key) and
 `deterministicUuid()` (UUID5 of the globalId, used as the Qdrant point ID). Multiple
-repositories coexist in the same databases; queries filter by `repository` to scope,
+projects coexist in the same databases; queries filter by `namespace` to scope,
 or search across all.
 
-### Tool descriptors
+### Capability cards
 
-For **public methods only**, the LLM phase produces a descriptor shaped like an
-LLM tool-use registration:
+For **public methods only**, the pipeline produces a structured capability card:
 
 ```json
 {
-  "coordinate": "demo-app::::com.example.demo.service.EmployeeService.hireEmployee(com.example.demo.dto.EmployeeDto)",
-  "displayName": "EmployeeService.hireEmployee",
-  "language": "java",
-  "description": "Persists a new active employee from the supplied DTO…",
+  "signature": "public EmployeeDto hireEmployee(EmployeeDto dto)",
+  "summary": "Hire a new employee, optionally assigning them to a department...",
   "parameters": [
-    { "name": "dto", "nativeType": "com.example.demo.dto.EmployeeDto", "description": "…" }
+    { "name": "dto", "type": "EmployeeDto", "description": "Employee data including name, email, salary..." }
   ],
-  "returnType": "com.example.demo.dto.EmployeeDto"
+  "preconditions": "Email must be unique across all employees...",
+  "returns": "The persisted EmployeeDto with generated ID...",
+  "throws": "IllegalArgumentException if email is already registered...",
+  "sideEffects": "Persists a new Employee entity to the database..."
 }
 ```
 
-Note: this is a **code-implementation hint**, not a runtime tool registration. The
-agent reads it and emits source code that calls the method directly. MCP / OpenAI /
-Anthropic tool-schema projections (with their 64-char sanitized names and JSON
-Schema `input_schema`) are computed on demand — there's exactly one canonical
-storage form.
+This is a **code-level contract**, not a runtime tool registration. An AI agent reads it
+to decide whether and how to call the method from code it is writing.
 
 ---
 
@@ -198,8 +218,9 @@ cd ui && npm install && node server.js
 ```
 
 Open http://localhost:3000 — filter by package / class / method, click **Show Graph**,
-click nodes for the full detail panel (summary, internal documentation, tool
-descriptor, call-graph edges).
+click nodes for the full detail panel (purpose summary, developer doc, capability card,
+code health, call-graph edges). Semantic search and fulltext search are available in the
+sidebar.
 
 ### Example Cypher
 
@@ -221,25 +242,24 @@ RETURN path;
 
 ## Design decisions worth flagging
 
-1. **No source modification.** Nothing is written back into `.java` files. The
-   generated documentation and descriptors live only in Neo4j / Qdrant.
-2. **Call-chain-aware summarisation.** A caller's summary is generated *after* its
-   callees, with those callees' summaries as context. This produces far more accurate
-   behaviour descriptions than per-method-in-isolation prompting.
-3. **Hybrid tool-descriptor generation.** Structure (parameter names, native types,
-   coordinate) is deterministic from the parsed AST. The LLM contributes only
-   descriptions. It cannot invent, drop, or rename parameters.
-4. **Public-only tool descriptors.** Private / protected / package-private methods
-   still get parsed, still enter the call graph, still get summaries and embeddings —
-   they just have `toolDescriptor = null`. The descriptor's purpose is "can an agent
-   call this from new code?" and non-public methods aren't accessible from outside
-   their scope.
-5. **No fat jar.** Distributed as `jar + lib/` (maven-jar-plugin +
-   maven-dependency-plugin) rather than maven-shade.
-6. **Graph-only mode.** `--graph-only` (the default without the `--with-*` flags)
-   skips all LLM and embedding calls. Useful for quick call-graph exploration or CI
-   runs without API keys.
-7. **Multi-repo aware from day one.** Coordinates are `repo::module::qualifiedSig`.
+1. **No source modification.** Nothing is written back into source files. All generated
+   content lives only in Neo4j / Qdrant.
+2. **Call-chain-aware summarization.** A caller's summary is generated *after* its
+   callees, with those callees' purpose summaries as context. This produces far more
+   accurate behavior descriptions than per-method-in-isolation prompting.
+3. **Two-summary design.** `purposeSummary` is business-oriented and used for vector
+   embeddings (semantic search). `developerDoc` is a behavioral walkthrough for humans.
+   They serve different audiences and must not be conflated — technical summaries
+   cluster in vector space, making semantic search useless.
+4. **Hybrid capability card generation.** Structural fields (signature, parameter
+   names/types) are deterministic from the AST. The LLM contributes only descriptions.
+   It cannot invent, drop, or rename parameters.
+5. **Public-only capability cards.** Private / protected / package-private methods
+   still get parsed, still enter the call graph, still get summaries and code health
+   ratings — they just have `capabilityCard = null`.
+6. **Graph-only mode.** The default (without `--with-*` flags) skips all LLM and
+   embedding calls. Useful for quick call-graph exploration or CI runs without API keys.
+7. **Multi-namespace aware.** Coordinates are `namespace::language:qualifiedSignature`.
    Multiple projects share the same Neo4j + Qdrant stores.
 
 ---
@@ -264,13 +284,14 @@ RETURN path;
 ## Project layout
 
 ```
-src/main/java/com/ldoc/
+src/main/java/com/github/gabert/llm/mcp/ldoc/
   core/        Main, AppConfig, AnalysisPipeline (phase orchestration)
   parser/      MethodExtractor (JavaParser + symbol solver)
+  lsp/         LspClient, LspMethodExtractor (LSP-based extraction)
   graph/       TopologicalSorter (Kahn's algorithm, cycle-aware)
-  llm/         ClaudeClient, PromptBuilder, SummaryParser, ToolDescriptorBuilder
+  llm/         ClaudeClient, PromptBuilder, SummaryParser
   storage/     Neo4jGraphStore, QdrantVectorStore, OpenAiEmbeddingClient
-  model/       MethodCoordinate, MethodInfo, ParameterInfo, ToolDescriptor, Visibility
+  model/       MethodCoordinate, MethodInfo, CapabilityCard, ParameterInfo, Visibility
 ui/            Node.js Express server + Cytoscape.js frontend
 docker-compose.yml
 pom.xml
@@ -289,6 +310,5 @@ Issues, ideas, and PRs are welcome. Good entry points for reading the code:
 
 - `core/AnalysisPipeline.java` — end-to-end phase orchestration
 - `parser/MethodExtractor.java` — how call resolution actually happens
-- `llm/PromptBuilder.java` + `llm/ToolDescriptorBuilder.java` — hybrid
-  deterministic/LLM descriptor assembly
+- `llm/PromptBuilder.java` — the LLM prompt that produces all artifacts
 - `graph/TopologicalSorter.java` — cycle handling for mutually recursive methods
