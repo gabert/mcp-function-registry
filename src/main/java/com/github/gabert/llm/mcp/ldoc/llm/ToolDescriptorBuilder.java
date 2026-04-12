@@ -1,10 +1,10 @@
-package com.ldoc.llm;
+package com.github.gabert.llm.mcp.ldoc.llm;
 
-import com.ldoc.model.MethodInfo;
-import com.ldoc.model.ParameterInfo;
-import com.ldoc.model.ToolDescriptor;
-import com.ldoc.model.ToolParameter;
-import com.ldoc.model.Visibility;
+import com.github.gabert.llm.mcp.ldoc.model.MethodInfo;
+import com.github.gabert.llm.mcp.ldoc.model.ParameterInfo;
+import com.github.gabert.llm.mcp.ldoc.model.ToolDescriptor;
+import com.github.gabert.llm.mcp.ldoc.model.ToolParameter;
+import com.github.gabert.llm.mcp.ldoc.model.Visibility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

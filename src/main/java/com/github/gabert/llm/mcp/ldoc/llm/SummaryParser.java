@@ -1,4 +1,4 @@
-package com.ldoc.llm;
+package com.github.gabert.llm.mcp.ldoc.llm;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;

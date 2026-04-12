@@ -1,4 +1,4 @@
-package com.ldoc.model;
+package com.github.gabert.llm.mcp.ldoc.model;
 
 /**
  * One parameter of a {@link ToolDescriptor}. Carries the native (language-specific)

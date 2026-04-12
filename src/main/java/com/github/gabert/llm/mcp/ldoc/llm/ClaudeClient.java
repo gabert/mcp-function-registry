@@ -1,7 +1,7 @@
-package com.ldoc.llm;
+package com.github.gabert.llm.mcp.ldoc.llm;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ldoc.core.AppConfig;
+import com.github.gabert.llm.mcp.ldoc.core.AppConfig;
 import okhttp3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

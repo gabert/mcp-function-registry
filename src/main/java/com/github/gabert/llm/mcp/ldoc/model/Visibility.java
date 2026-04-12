@@ -1,4 +1,4 @@
-package com.ldoc.model;
+package com.github.gabert.llm.mcp.ldoc.model;
 
 /**
  * Source-level visibility of a method, derived from its declared access modifier.

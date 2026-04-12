@@ -1,8 +1,8 @@
-package com.ldoc.storage;
+package com.github.gabert.llm.mcp.ldoc.storage;
 
-import com.ldoc.core.AppConfig;
-import com.ldoc.model.MethodCoordinate;
-import com.ldoc.model.MethodInfo;
+import com.github.gabert.llm.mcp.ldoc.core.AppConfig;
+import com.github.gabert.llm.mcp.ldoc.model.MethodCoordinate;
+import com.github.gabert.llm.mcp.ldoc.model.MethodInfo;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import io.qdrant.client.grpc.Collections;

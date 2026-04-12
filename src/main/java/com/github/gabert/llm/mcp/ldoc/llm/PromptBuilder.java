@@ -1,8 +1,8 @@
-package com.ldoc.llm;
+package com.github.gabert.llm.mcp.ldoc.llm;
 
-import com.ldoc.model.MethodInfo;
-import com.ldoc.model.ParameterInfo;
-import com.ldoc.model.Visibility;
+import com.github.gabert.llm.mcp.ldoc.model.MethodInfo;
+import com.github.gabert.llm.mcp.ldoc.model.ParameterInfo;
+import com.github.gabert.llm.mcp.ldoc.model.Visibility;
 
 import java.util.Map;
 

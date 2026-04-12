@@ -1,4 +1,4 @@
-package com.ldoc.lsp;
+package com.github.gabert.llm.mcp.ldoc.lsp;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

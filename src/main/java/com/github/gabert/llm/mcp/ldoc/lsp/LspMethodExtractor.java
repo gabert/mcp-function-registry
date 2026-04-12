@@ -1,10 +1,11 @@
-package com.ldoc.lsp;
+package com.github.gabert.llm.mcp.ldoc.lsp;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.ldoc.model.MethodCoordinate;
-import com.ldoc.model.MethodInfo;
-import com.ldoc.model.ParameterInfo;
-import com.ldoc.model.Visibility;
+import com.github.gabert.llm.mcp.ldoc.parser.MethodExtractor;
+import com.github.gabert.llm.mcp.ldoc.model.MethodCoordinate;
+import com.github.gabert.llm.mcp.ldoc.model.MethodInfo;
+import com.github.gabert.llm.mcp.ldoc.model.ParameterInfo;
+import com.github.gabert.llm.mcp.ldoc.model.Visibility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,7 +20,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Quick-and-dirty LSP-driven alternative to {@link com.ldoc.parser.MethodExtractor}.
+ * Quick-and-dirty LSP-driven alternative to {@link MethodExtractor}.
  * Spawns a language server via {@link LspClient}, walks the source tree, and builds
  * {@link MethodInfo} instances from documentSymbol + callHierarchy responses.
  *

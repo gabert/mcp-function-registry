@@ -1,6 +1,6 @@
-package com.ldoc.graph;
+package com.github.gabert.llm.mcp.ldoc.graph;
 
-import com.ldoc.model.MethodInfo;
+import com.github.gabert.llm.mcp.ldoc.model.MethodInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

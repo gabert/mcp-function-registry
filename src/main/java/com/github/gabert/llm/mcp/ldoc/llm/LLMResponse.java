@@ -1,4 +1,4 @@
-package com.ldoc.llm;
+package com.github.gabert.llm.mcp.ldoc.llm;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 

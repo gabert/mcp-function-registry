@@ -1,4 +1,4 @@
-package com.ldoc.model;
+package com.github.gabert.llm.mcp.ldoc.model;
 
 import java.util.UUID;
 

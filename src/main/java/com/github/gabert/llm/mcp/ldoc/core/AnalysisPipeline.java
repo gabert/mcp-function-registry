@@ -1,17 +1,17 @@
-package com.ldoc.core;
+package com.github.gabert.llm.mcp.ldoc.core;
 
-import com.ldoc.graph.TopologicalSorter;
-import com.ldoc.llm.ClaudeClient;
-import com.ldoc.llm.LLMResponse;
-import com.ldoc.llm.PromptBuilder;
-import com.ldoc.llm.SummaryParser;
-import com.ldoc.llm.ToolDescriptorBuilder;
-import com.ldoc.lsp.LspMethodExtractor;
-import com.ldoc.model.MethodInfo;
-import com.ldoc.parser.MethodExtractor;
-import com.ldoc.storage.Neo4jGraphStore;
-import com.ldoc.storage.OpenAiEmbeddingClient;
-import com.ldoc.storage.QdrantVectorStore;
+import com.github.gabert.llm.mcp.ldoc.graph.TopologicalSorter;
+import com.github.gabert.llm.mcp.ldoc.llm.ClaudeClient;
+import com.github.gabert.llm.mcp.ldoc.llm.LLMResponse;
+import com.github.gabert.llm.mcp.ldoc.llm.PromptBuilder;
+import com.github.gabert.llm.mcp.ldoc.llm.SummaryParser;
+import com.github.gabert.llm.mcp.ldoc.llm.ToolDescriptorBuilder;
+import com.github.gabert.llm.mcp.ldoc.lsp.LspMethodExtractor;
+import com.github.gabert.llm.mcp.ldoc.model.MethodInfo;
+import com.github.gabert.llm.mcp.ldoc.parser.MethodExtractor;
+import com.github.gabert.llm.mcp.ldoc.storage.Neo4jGraphStore;
+import com.github.gabert.llm.mcp.ldoc.storage.OpenAiEmbeddingClient;
+import com.github.gabert.llm.mcp.ldoc.storage.QdrantVectorStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

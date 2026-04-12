@@ -1,4 +1,4 @@
-package com.ldoc.parser;
+package com.github.gabert.llm.mcp.ldoc.parser;
 
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.AccessSpecifier;
@@ -11,10 +11,10 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSol
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import com.github.javaparser.utils.SourceRoot;
-import com.ldoc.model.MethodCoordinate;
-import com.ldoc.model.MethodInfo;
-import com.ldoc.model.ParameterInfo;
-import com.ldoc.model.Visibility;
+import com.github.gabert.llm.mcp.ldoc.model.MethodCoordinate;
+import com.github.gabert.llm.mcp.ldoc.model.MethodInfo;
+import com.github.gabert.llm.mcp.ldoc.model.ParameterInfo;
+import com.github.gabert.llm.mcp.ldoc.model.Visibility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

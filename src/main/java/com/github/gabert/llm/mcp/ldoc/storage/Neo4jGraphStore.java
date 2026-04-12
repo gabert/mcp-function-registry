@@ -1,11 +1,11 @@
-package com.ldoc.storage;
+package com.github.gabert.llm.mcp.ldoc.storage;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ldoc.core.AppConfig;
-import com.ldoc.model.MethodInfo;
-import com.ldoc.model.ParameterInfo;
-import com.ldoc.model.ToolDescriptor;
+import com.github.gabert.llm.mcp.ldoc.core.AppConfig;
+import com.github.gabert.llm.mcp.ldoc.model.MethodInfo;
+import com.github.gabert.llm.mcp.ldoc.model.ParameterInfo;
+import com.github.gabert.llm.mcp.ldoc.model.ToolDescriptor;
 import org.neo4j.driver.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

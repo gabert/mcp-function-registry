@@ -123,7 +123,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.ldoc.core.Main</mainClass>
+                            <mainClass>com.github.gabert.llm.mcp.ldoc.core.Main</mainClass>
                             <addClasspath>true</addClasspath>
                             <classpathPrefix>lib/</classpathPrefix>
                         </manifest>

@@ -1,4 +1,4 @@
-package com.ldoc.core;
+package com.github.gabert.llm.mcp.ldoc.core;
 
 import io.github.cdimascio.dotenv.Dotenv;
 

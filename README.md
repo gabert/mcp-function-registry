@@ -1,15 +1,13 @@
-# symbol-registry
+# mcp-function-registry
 
 **A queryable index of a codebase's methods, built for AI coding agents.**
 
-`symbol-registry` parses a Java source tree, walks the resolved call graph, generates
-call-chain-aware summaries and LLM tool descriptors for every method, and stores the
-result as a Neo4j graph plus a Qdrant vector index. The end goal is a language-agnostic
-**symbol registry** that coding agents can query — via MCP or a thin REST surface — to
-discover *which existing method to call* when writing new code, instead of re-deriving
-the answer from raw source on every turn.
-
-This repo is the Java-only v1 of that idea.
+`mcp-function-registry` walks a resolved call graph, generates call-chain-aware summaries
+and LLM tool descriptors for every method, and stores the result as a Neo4j graph plus a
+Qdrant vector index. The registry is language-agnostic by design: coding agents query it
+— via MCP or a thin REST surface — to discover *which existing method to call* when
+writing new code, instead of re-deriving the answer from raw source on every turn. The
+current parser backend targets Java; additional language backends are on the roadmap.
 
 ---
 
@@ -171,14 +169,14 @@ mvn package -DskipTests
 Graph-only — no API keys needed, just parse + store the call graph:
 
 ```bash
-java -jar target/symbol-registry-1.0.0-SNAPSHOT.jar \
+java -jar target/mcp-function-registry-1.0.0-SNAPSHOT.jar \
   my-repo ./src/main/java
 ```
 
 Full pipeline — parse + LLM summaries + embeddings:
 
 ```bash
-java -jar target/symbol-registry-1.0.0-SNAPSHOT.jar \
+java -jar target/mcp-function-registry-1.0.0-SNAPSHOT.jar \
   my-repo ./src/main/java --with-summary --with-embeddings
 ```
 
@@ -273,10 +271,10 @@ pom.xml
 
 ## Status
 
-Early, actively developed, single-maintainer. The Java pipeline is working
-end-to-end (parse → summarise → Neo4j + Qdrant → UI) and has been validated against
-a small Spring Boot demo application (~100 methods). Interfaces are **not** stable —
-expect breaking changes as the MCP and multi-language work lands.
+Early, actively developed, single-maintainer. The pipeline is working end-to-end
+(parse → summarise → Neo4j + Qdrant → UI) and has been validated against a small
+Spring Boot demo application (~100 methods). Interfaces are **not** stable — expect
+breaking changes as the MCP and multi-language work lands.
 
 Issues, ideas, and PRs are welcome. Good entry points for reading the code:
 
