@@ -8,6 +8,27 @@ Results are stored in Neo4j (graph) and Qdrant (vector search) and explored via 
 UI. The registry is language-agnostic by design; the current parser backend targets Java,
 with additional language backends on the roadmap.
 
+---
+
+## Why
+
+**For AI coding agents:** today's agents navigate codebases through grep, file reads, and
+brute-force context stuffing. This works on small projects but breaks down on large
+codebases — grep finds syntax matches, not behavioral ones, and dumping thousands of files
+into a prompt is wasteful and imprecise. An agent should be able to ask *"which method
+creates an invoice from a cart?"* and get a structured, ranked answer in milliseconds.
+That requires the index to be **pre-computed, call-chain-aware, and stored as a graph +
+vector space**, not re-derived from raw source on every turn. This project builds that
+index and exposes it via MCP.
+
+**For developers:** javadoc rots. Teams write it once and never update it, or skip it
+entirely. Finding the right method in a large codebase becomes a game of guessing symbol
+names and reading through implementation details. This tool generates accurate,
+always-regenerable method documentation directly from the code — purpose summaries for
+discovery, behavioral docs for understanding, and code health assessments for
+maintainability. No manual upkeep required: re-run the pipeline after any change and the
+documentation reflects the current state of the code.
+
 <p align="center">
   <br>
   <em>Call graph with method detail panel — signature, javadoc, code health, purpose summary</em><br>
