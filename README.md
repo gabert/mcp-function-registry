@@ -362,7 +362,7 @@ Early, actively developed, single-maintainer. The pipeline is working end-to-end
 Spring Boot demo application (~100 methods). Interfaces are **not** stable — expect
 breaking changes as the MCP and multi-language work lands.
 
-Issues, ideas, and PRs are welcome. Good entry points for reading the code:
+Good entry points for reading the code:
 
 - `core/AnalysisPipeline.java` — end-to-end phase orchestration
 - `parser/MethodExtractor.java` — how call resolution actually happens
