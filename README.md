@@ -1,6 +1,6 @@
 # mcp-function-registry
 
-**A code intelligence tool that parses your codebase, builds a call graph, and uses LLM to generate semantic search, method summaries, capability cards for AI agents, and code health assessments.**
+**A code intelligence tool that helps AI agent write code at scale.**
 
 ## Why
 
