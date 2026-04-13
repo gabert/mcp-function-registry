@@ -2,6 +2,10 @@
 
 **A code intelligence tool that helps AI agent write code at scale.**
 
+# Note
+
+The tool will be migrated from Java to TypeScript.
+
 ## Why
 
 **For AI coding agents:** today's agents navigate codebases through grep, file reads, and
