@@ -10,7 +10,7 @@
     <packaging>jar</packaging>
 
     <name>ldoc - JavaDoc AutoGen</name>
-    <description>Parses Java source files, generates LLM-based javadoc summaries with call-chain awareness, stores in MongoDB and Qdrant vector DB.</description>
+    <description>Parses source files, generates LLM-based summaries with call-chain awareness, stores in PostgreSQL and Qdrant vector DB.</description>
 
     <properties>
         <java.version>17</java.version>
@@ -20,7 +20,7 @@
 
         <!-- Dependency versions -->
         <javaparser.version>3.26.2</javaparser.version>
-        <neo4j.version>5.21.0</neo4j.version>
+        <postgresql.version>42.7.3</postgresql.version>
         <qdrant.version>1.9.1</qdrant.version>
         <okhttp.version>4.12.0</okhttp.version>
         <jackson.version>2.17.2</jackson.version>
@@ -39,11 +39,11 @@
             <version>${javaparser.version}</version>
         </dependency>
 
-        <!-- ===== Neo4j ===== -->
+        <!-- ===== PostgreSQL ===== -->
         <dependency>
-            <groupId>org.neo4j.driver</groupId>
-            <artifactId>neo4j-java-driver</artifactId>
-            <version>${neo4j.version}</version>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${postgresql.version}</version>
         </dependency>
 
         <!-- ===== Qdrant vector DB ===== -->

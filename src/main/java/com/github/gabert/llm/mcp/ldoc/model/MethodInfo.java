@@ -19,6 +19,7 @@ public class MethodInfo {
     private String body;
     private List<String> calleeIds;       // globalId() of called methods (project-internal only)
     private String sourceFile;
+    private MethodRange range;           // byte-offset free; used to re-slice body from disk on demand
     private String bodyHash;
 
     private String existingJavadoc;       // extracted from source, if present
@@ -68,6 +69,9 @@ public class MethodInfo {
 
     public String getSourceFile() { return sourceFile; }
     public void setSourceFile(String sourceFile) { this.sourceFile = sourceFile; }
+
+    public MethodRange getRange() { return range; }
+    public void setRange(MethodRange range) { this.range = range; }
 
     public String getBodyHash() { return bodyHash; }
     public void setBodyHash(String bodyHash) { this.bodyHash = bodyHash; }

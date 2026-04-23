@@ -11,6 +11,7 @@ import io.qdrant.client.grpc.Points;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,40 +58,58 @@ public class QdrantVectorStore {
     }
 
     public void upsert(MethodInfo method, List<Float> embedding) {
-        try {
-            MethodCoordinate coord = method.getCoordinate();
+        upsertBatch(List.of(method), List.of(embedding));
+    }
 
-            Map<String, JsonWithInt.Value> payload = new HashMap<>();
-            // Coordinate — for cross-repo filtered search
-            payload.put("globalId",           value(method.getId()));
-            payload.put("namespace",          value(coord.getNamespace()));
-            payload.put("language",           value(coord.getLanguage()));
-            payload.put("qualifiedSignature", value(coord.getQualifiedSignature()));
-            // Method metadata — for result display and filtering
-            payload.put("package",            value(method.getPackageName()));
-            payload.put("className",          value(method.getClassName()));
-            payload.put("methodName",         value(method.getMethodName()));
-            payload.put("signature",          value(method.getSignature()));
-            payload.put("returnType",         value(method.getReturnType()));
-            payload.put("sourceFile",         value(method.getSourceFile()));
-            // Visibility / capability-card flag — for filtered search
-            // ("only methods an agent can call from new code")
-            payload.put("visibility",         value(method.getVisibility() != null ? method.getVisibility().name() : ""));
-            payload.put("hasCapabilityCard",  value(method.getCapabilityCard() != null));
-            // Content — for RAG retrieval
-            payload.put("developerDoc",       value(method.getDeveloperDoc() != null ? method.getDeveloperDoc() : ""));
-            payload.put("purposeSummary",     value(method.getPurposeSummary() != null ? method.getPurposeSummary() : ""));
-
-            var point = Points.PointStruct.newBuilder()
-                    .setId(id(coord.deterministicUuid()))
-                    .setVectors(vectors(embedding))
-                    .putAllPayload(payload)
-                    .build();
-
-            client.upsertAsync(collectionName, List.of(point)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException("Qdrant upsert failed for: " + method.getId(), e);
+    /**
+     * Batch upsert: all points are sent in a single gRPC call.
+     * {@code methods} and {@code embeddings} must have the same size and be index-aligned.
+     */
+    public void upsertBatch(List<MethodInfo> methods, List<List<Float>> embeddings) {
+        if (methods == null || methods.isEmpty()) return;
+        if (methods.size() != embeddings.size()) {
+            throw new IllegalArgumentException("methods and embeddings must have the same size");
         }
+        List<Points.PointStruct> points = new ArrayList<>(methods.size());
+        for (int i = 0; i < methods.size(); i++) {
+            points.add(buildPoint(methods.get(i), embeddings.get(i)));
+        }
+        try {
+            client.upsertAsync(collectionName, points).get();
+        } catch (InterruptedException | ExecutionException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Qdrant batch upsert failed", e);
+        }
+    }
+
+    private Points.PointStruct buildPoint(MethodInfo method, List<Float> embedding) {
+        MethodCoordinate coord = method.getCoordinate();
+        Map<String, JsonWithInt.Value> payload = new HashMap<>();
+        // Coordinate — for cross-repo filtered search
+        payload.put("globalId",           value(method.getId()));
+        payload.put("namespace",          value(coord.getNamespace()));
+        payload.put("language",           value(coord.getLanguage()));
+        payload.put("qualifiedSignature", value(coord.getQualifiedSignature()));
+        // Method metadata — for result display and filtering
+        payload.put("package",            value(method.getPackageName()));
+        payload.put("className",          value(method.getClassName()));
+        payload.put("methodName",         value(method.getMethodName()));
+        payload.put("signature",          value(method.getSignature()));
+        payload.put("returnType",         value(method.getReturnType()));
+        payload.put("sourceFile",         value(method.getSourceFile()));
+        // Visibility / capability-card flag — for filtered search
+        // ("only methods an agent can call from new code")
+        payload.put("visibility",         value(method.getVisibility() != null ? method.getVisibility().name() : ""));
+        payload.put("hasCapabilityCard",  value(method.getCapabilityCard() != null));
+        // Content — for RAG retrieval
+        payload.put("developerDoc",       value(method.getDeveloperDoc() != null ? method.getDeveloperDoc() : ""));
+        payload.put("purposeSummary",     value(method.getPurposeSummary() != null ? method.getPurposeSummary() : ""));
+
+        return Points.PointStruct.newBuilder()
+                .setId(id(coord.deterministicUuid()))
+                .setVectors(vectors(embedding))
+                .putAllPayload(payload)
+                .build();
     }
 
     public void close() {

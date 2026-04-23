@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.github.gabert.llm.mcp.ldoc.parser.MethodExtractor;
 import com.github.gabert.llm.mcp.ldoc.model.MethodCoordinate;
 import com.github.gabert.llm.mcp.ldoc.model.MethodInfo;
+import com.github.gabert.llm.mcp.ldoc.model.MethodRange;
 import com.github.gabert.llm.mcp.ldoc.model.ParameterInfo;
 import com.github.gabert.llm.mcp.ldoc.model.Visibility;
 import org.slf4j.Logger;
@@ -288,8 +289,16 @@ public class LspMethodExtractor {
         info.setVisibility(extractVisibility(sym, fileText));
         info.setCalleeIds(List.of());
 
-        // Body: slice from range
-        String body = sliceRange(fileText, sym.path("range"));
+        JsonNode range = sym.path("range");
+        MethodRange methodRange = new MethodRange(
+                range.path("start").path("line").asInt(0),
+                range.path("start").path("character").asInt(0),
+                range.path("end").path("line").asInt(0),
+                range.path("end").path("character").asInt(0)
+        );
+        info.setRange(methodRange);
+
+        String body = SourceSlicer.slice(fileText, methodRange);
         info.setBody(body);
         info.setBodyHash(sha256(body));
 
@@ -310,33 +319,6 @@ public class LspMethodExtractor {
         if (haystack.contains("private")) return Visibility.PRIVATE;
         if (haystack.contains("protected")) return Visibility.PROTECTED;
         return Visibility.PACKAGE_PRIVATE;
-    }
-
-    private String sliceRange(String text, JsonNode range) {
-        if (range == null || range.isMissingNode() || range.isNull()) return "";
-        int startLine = range.path("start").path("line").asInt(0);
-        int startCh = range.path("start").path("character").asInt(0);
-        int endLine = range.path("end").path("line").asInt(0);
-        int endCh = range.path("end").path("character").asInt(0);
-        String[] lines = text.split("\n", -1);
-        if (startLine >= lines.length) return "";
-        StringBuilder sb = new StringBuilder();
-        if (startLine == endLine) {
-            String l = lines[startLine];
-            if (endCh > l.length()) endCh = l.length();
-            if (startCh > l.length()) startCh = l.length();
-            return l.substring(startCh, endCh);
-        }
-        sb.append(lines[startLine].substring(Math.min(startCh, lines[startLine].length())));
-        sb.append('\n');
-        for (int i = startLine + 1; i < endLine && i < lines.length; i++) {
-            sb.append(lines[i]).append('\n');
-        }
-        if (endLine < lines.length) {
-            String l = lines[endLine];
-            sb.append(l, 0, Math.min(endCh, l.length()));
-        }
-        return sb.toString();
     }
 
     private String extractPackageName(String text) {

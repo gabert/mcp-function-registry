@@ -1,5 +1,5 @@
 const express = require("express");
-const neo4j = require("neo4j-driver");
+const { Pool } = require("pg");
 const path = require("path");
 const fs = require("fs");
 
@@ -16,38 +16,43 @@ const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const NEO4J_URI = process.env.NEO4J_URI || "bolt://localhost:7687";
 const QDRANT_URL = process.env.QDRANT_URL || "http://localhost:6333";
 const QDRANT_COLLECTION = process.env.QDRANT_COLLECTION || "ldoc_methods";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_EMBED_MODEL = process.env.OPENAI_EMBED_MODEL || "text-embedding-3-small";
-const driver = neo4j.driver(NEO4J_URI, neo4j.auth.none());
 
-async function query(cypher, params = {}) {
-    const session = driver.session();
-    try { return (await session.run(cypher, params)).records; }
-    finally { await session.close(); }
+const pool = new Pool({
+    host: process.env.PGHOST || "localhost",
+    port: parseInt(process.env.PGPORT || "5432"),
+    database: process.env.PGDATABASE || "ldoc",
+    user: process.env.PGUSER || "ldoc",
+    password: process.env.PGPASSWORD || "ldoc",
+});
+
+async function query(sql, params = []) {
+    const { rows } = await pool.query(sql, params);
+    return rows;
 }
 
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/api/packages", async (req, res) => {
-    const records = await query("MATCH (m:Method) RETURN DISTINCT m.package AS package ORDER BY package");
-    res.json(records.map(r => r.get("package")));
+    const rows = await query("SELECT DISTINCT package_name FROM methods ORDER BY package_name");
+    res.json(rows.map(r => r.package_name));
 });
 
 app.get("/api/classes", async (req, res) => {
-    const records = await query(
-        "MATCH (m:Method {package: $package}) RETURN DISTINCT m.className AS className ORDER BY className",
-        { package: req.query.package });
-    res.json(records.map(r => r.get("className")));
+    const rows = await query(
+        "SELECT DISTINCT class_name FROM methods WHERE package_name=$1 ORDER BY class_name",
+        [req.query.package]);
+    res.json(rows.map(r => r.class_name));
 });
 
 app.get("/api/methods", async (req, res) => {
-    const records = await query(
-        "MATCH (m:Method {package: $package, className: $className}) RETURN m.methodName AS methodName, m.globalId AS globalId, m.signature AS signature ORDER BY methodName",
-        { package: req.query.package, className: req.query.className });
-    res.json(records.map(r => ({ methodName: r.get("methodName"), globalId: r.get("globalId"), signature: r.get("signature") })));
+    const rows = await query(
+        "SELECT method_name, id AS global_id, signature FROM methods WHERE package_name=$1 AND class_name=$2 ORDER BY method_name",
+        [req.query.package, req.query.className]);
+    res.json(rows.map(r => ({ methodName: r.method_name, globalId: r.global_id, signature: r.signature })));
 });
 
 app.get("/api/graph", async (req, res) => {
@@ -56,103 +61,150 @@ app.get("/api/graph", async (req, res) => {
     const nodes = new Map();
     const edges = [];
 
-    function addNode(r, key) {
-        const p = r.get(key).properties;
-        if (!nodes.has(p.globalId))
-            nodes.set(p.globalId, {
-                id: p.globalId, name: p.name, className: p.className,
-                methodName: p.methodName, package: p.package,
-                signature: p.signature || "",
-                visibility: p.visibility || "",
-                existingJavadoc: p.existingJavadoc || "",
-                developerDoc: p.developerDoc || "",
-                capabilityCard: p.capabilityCard || "",
-                purposeSummary: p.purposeSummary || "",
-                codeHealthRating: p.codeHealthRating || "",
-                codeHealthNote: p.codeHealthNote || ""
+    function addNode(row) {
+        if (!nodes.has(row.id))
+            nodes.set(row.id, {
+                id: row.id,
+                name: row.class_name + "#" + row.method_name,
+                className: row.class_name,
+                methodName: row.method_name,
+                package: row.package_name,
+                signature: row.signature || "",
+                visibility: row.visibility || "",
+                existingJavadoc: row.existing_javadoc || "",
+                developerDoc: row.developer_doc || "",
+                capabilityCard: row.capability_card || "",
+                purposeSummary: row.purpose_summary || "",
+                codeHealthRating: row.code_health_rating || "",
+                codeHealthNote: row.code_health_note || ""
             });
     }
 
+    // Recursive CTE to walk call edges up to N hops
     if (direction === "callees" || direction === "both") {
-        const records = await query(
-            "MATCH path = (m:Method {globalId: $globalId})-[:CALLS*1.." + hops + "]->(callee) UNWIND relationships(path) AS r RETURN startNode(r) AS src, endNode(r) AS dst, r.order AS ord",
-            { globalId });
-        for (const rec of records) {
-            addNode(rec, "src"); addNode(rec, "dst");
-            edges.push({ source: rec.get("src").properties.globalId, target: rec.get("dst").properties.globalId, order: rec.get("ord") != null ? rec.get("ord").toNumber() : null });
+        const rows = await query(`
+            WITH RECURSIVE chain AS (
+                SELECT caller_id, callee_id, ordinal, 1 AS depth
+                FROM call_edges WHERE caller_id=$1
+                UNION ALL
+                SELECT e.caller_id, e.callee_id, e.ordinal, c.depth + 1
+                FROM call_edges e JOIN chain c ON e.caller_id = c.callee_id
+                WHERE c.depth < $2
+            )
+            SELECT DISTINCT c.caller_id, c.callee_id, c.ordinal,
+                   ms.id, ms.class_name, ms.method_name, ms.package_name,
+                   ms.signature, ms.visibility, ms.existing_javadoc,
+                   ms.developer_doc, ms.capability_card, ms.purpose_summary,
+                   ms.code_health_rating, ms.code_health_note,
+                   mt.id AS tid, mt.class_name AS t_class_name, mt.method_name AS t_method_name,
+                   mt.package_name AS t_package_name, mt.signature AS t_signature,
+                   mt.visibility AS t_visibility, mt.existing_javadoc AS t_existing_javadoc,
+                   mt.developer_doc AS t_developer_doc, mt.capability_card AS t_capability_card,
+                   mt.purpose_summary AS t_purpose_summary,
+                   mt.code_health_rating AS t_code_health_rating, mt.code_health_note AS t_code_health_note
+            FROM chain c
+            JOIN methods ms ON ms.id = c.caller_id
+            JOIN methods mt ON mt.id = c.callee_id
+        `, [globalId, hops]);
+        for (const r of rows) {
+            addNode(r);
+            addNode({
+                id: r.tid, class_name: r.t_class_name, method_name: r.t_method_name,
+                package_name: r.t_package_name, signature: r.t_signature,
+                visibility: r.t_visibility, existing_javadoc: r.t_existing_javadoc,
+                developer_doc: r.t_developer_doc, capability_card: r.t_capability_card,
+                purpose_summary: r.t_purpose_summary,
+                code_health_rating: r.t_code_health_rating, code_health_note: r.t_code_health_note
+            });
+            edges.push({ source: r.caller_id, target: r.callee_id, order: r.ordinal });
         }
     }
 
     if (direction === "callers" || direction === "both") {
-        const records = await query(
-            "MATCH path = (caller)-[:CALLS*1.." + hops + "]->(m:Method {globalId: $globalId}) UNWIND relationships(path) AS r RETURN startNode(r) AS src, endNode(r) AS dst, r.order AS ord",
-            { globalId });
-        for (const rec of records) {
-            addNode(rec, "src"); addNode(rec, "dst");
-            edges.push({ source: rec.get("src").properties.globalId, target: rec.get("dst").properties.globalId, order: rec.get("ord") != null ? rec.get("ord").toNumber() : null });
-        }
-    }
-
-    if (!nodes.has(globalId)) {
-        const records = await query("MATCH (m:Method {globalId: $globalId}) RETURN m", { globalId });
-        if (records.length > 0) {
-            const p = records[0].get("m").properties;
-            nodes.set(globalId, {
-                id: globalId, name: p.name, className: p.className, methodName: p.methodName,
-                package: p.package, signature: p.signature || "",
-                visibility: p.visibility || "",
-                existingJavadoc: p.existingJavadoc || "",
-                developerDoc: p.developerDoc || "",
-                capabilityCard: p.capabilityCard || "",
-                purposeSummary: p.purposeSummary || "",
-                codeHealthRating: p.codeHealthRating || "",
-                codeHealthNote: p.codeHealthNote || ""
+        const rows = await query(`
+            WITH RECURSIVE chain AS (
+                SELECT caller_id, callee_id, ordinal, 1 AS depth
+                FROM call_edges WHERE callee_id=$1
+                UNION ALL
+                SELECT e.caller_id, e.callee_id, e.ordinal, c.depth + 1
+                FROM call_edges e JOIN chain c ON e.callee_id = c.caller_id
+                WHERE c.depth < $2
+            )
+            SELECT DISTINCT c.caller_id, c.callee_id, c.ordinal,
+                   ms.id, ms.class_name, ms.method_name, ms.package_name,
+                   ms.signature, ms.visibility, ms.existing_javadoc,
+                   ms.developer_doc, ms.capability_card, ms.purpose_summary,
+                   ms.code_health_rating, ms.code_health_note,
+                   mt.id AS tid, mt.class_name AS t_class_name, mt.method_name AS t_method_name,
+                   mt.package_name AS t_package_name, mt.signature AS t_signature,
+                   mt.visibility AS t_visibility, mt.existing_javadoc AS t_existing_javadoc,
+                   mt.developer_doc AS t_developer_doc, mt.capability_card AS t_capability_card,
+                   mt.purpose_summary AS t_purpose_summary,
+                   mt.code_health_rating AS t_code_health_rating, mt.code_health_note AS t_code_health_note
+            FROM chain c
+            JOIN methods ms ON ms.id = c.caller_id
+            JOIN methods mt ON mt.id = c.callee_id
+        `, [globalId, hops]);
+        for (const r of rows) {
+            addNode(r);
+            addNode({
+                id: r.tid, class_name: r.t_class_name, method_name: r.t_method_name,
+                package_name: r.t_package_name, signature: r.t_signature,
+                visibility: r.t_visibility, existing_javadoc: r.t_existing_javadoc,
+                developer_doc: r.t_developer_doc, capability_card: r.t_capability_card,
+                purpose_summary: r.t_purpose_summary,
+                code_health_rating: r.t_code_health_rating, code_health_note: r.t_code_health_note
             });
+            edges.push({ source: r.caller_id, target: r.callee_id, order: r.ordinal });
         }
     }
 
+    // Ensure the root node is always present
+    if (!nodes.has(globalId)) {
+        const rows = await query("SELECT * FROM methods WHERE id=$1", [globalId]);
+        if (rows.length > 0) {
+            const r = rows[0];
+            addNode(r);
+        }
+    }
+
+    // Deduplicate edges
     const edgeSet = new Map();
     for (const e of edges) { const k = e.source + e.target; if (!edgeSet.has(k)) edgeSet.set(k, e); }
     res.json({ nodes: [...nodes.values()], edges: [...edgeSet.values()], rootId: globalId });
 });
 
-// ---------- Full-text search over summaries (Neo4j CONTAINS) ----------
+// ---------- Full-text search over summaries (ILIKE) ----------
 app.get("/api/search/fulltext", async (req, res) => {
     const q = (req.query.q || "").trim();
     if (!q) return res.json({ results: [] });
     const limit = Math.min(parseInt(req.query.limit) || 30, 200);
 
-    // Split into lowercase tokens; each token must appear somewhere in summary
-    // OR purposeSummary (per-token OR between the two fields, AND across tokens).
     const tokens = q.toLowerCase().split(/\s+/).filter(t => t.length > 0);
     if (tokens.length === 0) return res.json({ results: [] });
 
-    const whereClauses = tokens.map((_, i) =>
-        `((m.developerDoc IS NOT NULL AND toLower(m.developerDoc) CONTAINS $t${i})
-         OR (m.purposeSummary IS NOT NULL AND toLower(m.purposeSummary) CONTAINS $t${i}))`
+    const conditions = tokens.map((_, i) =>
+        `(COALESCE(developer_doc,'') ILIKE $${i + 1} OR COALESCE(purpose_summary,'') ILIKE $${i + 1})`
     ).join(" AND ");
 
-    const params = { limit: neo4j.int(limit) };
-    tokens.forEach((t, i) => { params[`t${i}`] = t; });
+    const params = tokens.map(t => `%${t}%`);
+    params.push(limit);
 
-    const records = await query(
-        `MATCH (m:Method)
-         WHERE ${whereClauses}
-         RETURN m.globalId AS globalId, m.package AS package, m.className AS className,
-                m.methodName AS methodName, m.signature AS signature,
-                m.developerDoc AS developerDoc, m.purposeSummary AS purposeSummary
-         LIMIT $limit`,
+    const rows = await query(
+        `SELECT id, package_name, class_name, method_name, signature, developer_doc, purpose_summary
+         FROM methods WHERE ${conditions}
+         LIMIT $${params.length}`,
         params
     );
     res.json({
-        results: records.map(r => ({
-            globalId: r.get("globalId"),
-            package: r.get("package"),
-            className: r.get("className"),
-            methodName: r.get("methodName"),
-            signature: r.get("signature"),
-            developerDoc: r.get("developerDoc") || "",
-            purposeSummary: r.get("purposeSummary") || ""
+        results: rows.map(r => ({
+            globalId: r.id,
+            package: r.package_name,
+            className: r.class_name,
+            methodName: r.method_name,
+            signature: r.signature,
+            developerDoc: r.developer_doc || "",
+            purposeSummary: r.purpose_summary || ""
         }))
     });
 });
@@ -168,7 +220,6 @@ app.get("/api/search/rag", async (req, res) => {
     }
 
     try {
-        // 1) Embed the query
         const embedResp = await fetch("https://api.openai.com/v1/embeddings", {
             method: "POST",
             headers: {
@@ -184,7 +235,6 @@ app.get("/api/search/rag", async (req, res) => {
         const embedJson = await embedResp.json();
         const vector = embedJson.data[0].embedding;
 
-        // 2) Query Qdrant for nearest neighbors
         const qdrantResp = await fetch(`${QDRANT_URL}/collections/${QDRANT_COLLECTION}/points/search`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },

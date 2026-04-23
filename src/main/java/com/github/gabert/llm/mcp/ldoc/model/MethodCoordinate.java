@@ -8,7 +8,7 @@ import java.util.UUID;
  * Format: namespace::language:pkg.Class#method(ParamType,ParamType)
  *
  * - namespace: user-supplied bucket label (e.g. "demo-app"), allows multiple
- *   indexings to coexist in one Neo4j/Qdrant without collisions.
+ *   indexings to coexist in one database without collisions.
  * - language prefix: "java:", "python:", "go:", etc. — future-proofs for
  *   multi-language support.
  * - qualifiedSignature: pkg.Class#method(ParamType,ParamType) — built from
@@ -30,7 +30,7 @@ public class MethodCoordinate {
     public String getQualifiedSignature() { return qualifiedSignature; }
 
     /**
-     * Global string ID used as Neo4j node key and Qdrant point identity.
+     * Global string ID used as database primary key and Qdrant point identity.
      * Format: namespace::language:qualifiedSignature
      */
     public String globalId() {

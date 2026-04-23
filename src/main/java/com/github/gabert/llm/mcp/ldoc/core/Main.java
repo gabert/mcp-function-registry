@@ -19,7 +19,7 @@ public class Main {
             System.err.println("  --with-embeddings  — also store embeddings in Qdrant (implies --with-summary, requires OPENAI_API_KEY)");
             System.err.println("  --lsp              — extract via LSP server instead of JavaParser (see lsp.server.command)");
             System.err.println();
-            System.err.println("Default: parse source and store call graph in Neo4j only (no LLM calls).");
+            System.err.println("Default: parse source and store call graph in PostgreSQL only (no LLM calls).");
             System.err.println();
             System.err.println("Examples:");
             System.err.println("  mcp-function-registry payment-service ./src/main/java");
